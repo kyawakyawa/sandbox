@@ -65,6 +65,7 @@ opencl: $(ALL_C_SPIRV)
 $(ALL_C_SPIRV):$(ALL_C_CL)
 	clang -Xclang -finclude-default-header -xcl -cl-std=CL2.0 -fsyntax-only $<
 	clspv -o=$@ $< -O=3
+	clspv-reflection -o $(basename $@).csv $@
 	spirv-cross $@ --output $(basename $@).comp --vulkan-semantics
 	glslangValidator -V -S comp -o $@ $(basename $@).comp
 
@@ -76,7 +77,7 @@ weak_clean:
 	if [ -f $(CMAKE_BUILD_DEBUG_DIR)/Makefile ]; then cd $(CMAKE_BUILD_DEBUG_DIR) && $(MAKE) clean && cd .. ; fi
 
 # OpenCL
-	$(RM) $(ALL_C_SPIRV) $(basename $(ALL_C_SPIRV)).comp
+	$(RM) $(ALL_C_SPIRV) $(basename $(ALL_C_SPIRV)).comp $(basename $(ALL_C_SPIRV)).csv
 
 # if [ -f $(CMAKE_BUILD_RELEASE_DIR)/Makefile ]; then cmake --build $(CMAKE_BUILD_RELEASE_DIR) --target clean ; fi
 # if [ -f $(CMAKE_BUILD_DEBUG_DIR)/Makefile ]; then cmake --build $(CMAKE_BUILD_DEBUG_DIR) --target clean ; fi
