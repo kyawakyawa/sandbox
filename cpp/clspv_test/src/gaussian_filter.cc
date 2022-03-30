@@ -12,7 +12,7 @@
 
 // const int WIDTH          = 3200;  // Size of rendered mandelbrot set.
 // const int HEIGHT         = 2400;  // Size of renderered mandelbrot set.
-const int WORKGROUP_SIZE = 32;    // Workgroup size in compute shader.
+const int WORKGROUP_SIZE = 32;  // Workgroup size in compute shader.
 
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -157,7 +157,6 @@ public:
   ComputeApplication(const std::string input_filepath,
                      const std::string output_filepath);
   void run() {
-
     loadSrcPng();
 
     glayscaleSrcImg();
@@ -241,10 +240,6 @@ public:
     decltype(input_img_buf_)::value_type* pmapped_memory =
         reinterpret_cast<typename decltype(input_img_buf_)::value_type*>(
             mapped_memory);
-
-    vkUnmapMemory(device, dst_buffer_memory_);
-    printf("Download dst image from GPU\n");
-
     std::vector<decltype(input_img_buf_)::value_type> output_img_buf(
         input_img_width_ * input_img_height_ * 4);
 
@@ -254,6 +249,9 @@ public:
       output_img_buf[i * 4 + 2] = pmapped_memory[i];
       output_img_buf[i * 4 + 3] = 255;
     }
+
+    vkUnmapMemory(device, dst_buffer_memory_);
+    printf("Download dst image from GPU\n");
 
     // Now we save the acquired color data to a .png.
     unsigned error = lodepng::encode(output_filepath_.c_str(), output_img_buf,
@@ -1155,7 +1153,8 @@ public:
     If you are already familiar with compute shaders from OpenGL, this should be
     nothing new to you.
     */
-    vkCmdDispatch(commandBuffer, (uint32_t)ceil(input_img_width_ / float(WORKGROUP_SIZE)),
+    vkCmdDispatch(commandBuffer,
+                  (uint32_t)ceil(input_img_width_ / float(WORKGROUP_SIZE)),
                   (uint32_t)ceil(input_img_height_ / float(WORKGROUP_SIZE)), 1);
 
     VK_CHECK_RESULT(
