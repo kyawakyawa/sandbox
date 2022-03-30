@@ -32,7 +32,7 @@ typedef struct {
 
 __attribute__((reqd_work_group_size(WORKGROUP_SIZE, WORKGROUP_SIZE, 1)))
 __kernel void
-test(__global Pixel* outputs) {
+mandelbrot (__global Pixel* outputs) {
   const uint index_x = get_global_id(0);
   const uint index_y = get_global_id(1);
 

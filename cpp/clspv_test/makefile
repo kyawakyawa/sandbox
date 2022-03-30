@@ -69,7 +69,7 @@ opencl: $(ALL_C_SPIRV)
 	spirv-dis -o $(basename $@).txt $@
 	spirv-cross $@ --output $(basename $@).json --reflect
 	spirv-cross $@ --output $(basename $@).comp --vulkan-semantics
-	glslangValidator -V -S comp -o $@ $(basename $@).comp
+#	glslangValidator -V -S comp -o $@ $(basename $@).comp
 
 ############################################################################
 

@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <unordered_set>
 #include <vector>
 
 #include "lodepng.h"  //Used for png encoding.
@@ -58,6 +59,14 @@ private:
   us to interact with the physical device.
   */
   VkDevice device;
+
+  // clang-format off
+  const std::vector<const char*> device_extensions_ = {
+      // VK_KHR_VARIABLE_POINTERS_EXTENSION_NAME,            // Clspvを使う場合に必要
+      VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,     // Clspvを使う場合に必要
+      VK_KHR_STORAGE_BUFFER_STORAGE_CLASS_EXTENSION_NAME, // Clspvを使う場合に必要
+  };
+  // clang-format on
 
   /*
   The pipeline specifies the pipeline that all graphics and compute commands
@@ -364,12 +373,76 @@ public:
     into account.
 
     */
+    bool found_device = false;
     for (VkPhysicalDevice device : devices) {
-      if (true) {  // As above stated, we do no feature checks, so just accept.
+      if (IsDeviceSuitable(
+              device)) {  // 一番最初に条件を満たすデバイスを見つけたらそれを選択
         physicalDevice = device;
+        found_device     = true;
         break;
       }
     }
+    if (!found_device) {
+      throw std::runtime_error("Physical Device not found\n");
+    }
+  }
+
+  bool IsDeviceSuitable(VkPhysicalDevice device) {
+    VkPhysicalDeviceProperties device_properties;
+    VkPhysicalDeviceFeatures device_features;
+
+    vkGetPhysicalDeviceProperties(device, &device_properties);
+    vkGetPhysicalDeviceFeatures(device, &device_features);
+
+    // グラフィックカードか？
+    const bool condition0 =
+        /* グラフィックカード */
+        device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ||
+        /* 統合GPU */
+        device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+
+#ifndef NDEBUG
+    if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+      printf("グラフィックカードが検出されました\n");
+    } else if (device_properties.deviceType ==
+               VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+      printf("統合GPUが検出されました\n");
+    }
+#endif
+
+    // 拡張機能に対応しているか
+    const bool extensions_supported = CheckDeviceExtensionSupport(device);
+
+    return condition0 && extensions_supported;
+  }
+  bool CheckDeviceExtensionSupport(const VkPhysicalDevice device) {
+    uint32_t extension_count;
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count,
+                                         nullptr);
+
+    std::vector<VkExtensionProperties> available_extensions(extension_count);
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count,
+                                         available_extensions.data());
+
+    std::unordered_set<std::string> required_extensions(
+        device_extensions_.begin(), device_extensions_.end());
+
+#ifndef NDEBUG
+    printf("----- Available Extensions -----\n");
+    for (const auto& extension : available_extensions) {
+      printf("     -- %s\n", extension.extensionName);
+    }
+#endif
+
+    for (const auto& extension : available_extensions) {
+      required_extensions.erase(extension.extensionName);
+    }
+
+    for (const auto& extension_name : required_extensions) {
+      fprintf(stderr, "not find Extension : %s\n", extension_name.c_str());
+    }
+
+    return required_extensions.empty();
   }
 
   // Returns the index of a queue family that supports compute operations.
@@ -442,6 +515,11 @@ public:
                            // what queues it has.
     deviceCreateInfo.queueCreateInfoCount = 1;
     deviceCreateInfo.pEnabledFeatures     = &deviceFeatures;
+
+    // 拡張を指定
+    deviceCreateInfo.enabledExtensionCount =
+        static_cast<uint32_t>(device_extensions_.size());
+    deviceCreateInfo.ppEnabledExtensionNames = device_extensions_.data();
 
     VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL,
                                    &device));  // create logical device.
@@ -697,7 +775,8 @@ public:
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderStageCreateInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
     shaderStageCreateInfo.module = computeShaderModule;
-    shaderStageCreateInfo.pName  = "main";
+    // shaderStageCreateInfo.pName  = "main";
+    shaderStageCreateInfo.pName  = "mandelbrot";
 
     /*
     The pipeline layout allows the pipeline to access descriptor sets.

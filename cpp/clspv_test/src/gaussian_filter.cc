@@ -62,8 +62,12 @@ private:
 
   // clang-format off
   const std::vector<const char*> device_extensions_ = {
+      VK_KHR_VARIABLE_POINTERS_EXTENSION_NAME,            // Clspvを使う場合に必要
+      VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,     // Clspvを使う場合に必要
+      VK_KHR_STORAGE_BUFFER_STORAGE_CLASS_EXTENSION_NAME, // Clspvを使う場合に必要
+
       VK_KHR_8BIT_STORAGE_EXTENSION_NAME,  // shader interfaceに8bitの型用いる
-      VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME  // shader内で8bit intをもちいる 
+      VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME  // shader内で8bit intを用いる 
                                                  // (SPIR-Vで OpCapability Int8を使えるようにする)
   };
   // clang-format on
@@ -142,6 +146,12 @@ private:
   uint32_t input_img_width_;
   uint32_t input_img_height_;
 
+  struct MyPushConstant {
+    uint32_t w;
+    uint32_t h;
+    float sigma;
+  };
+
 public:
   ComputeApplication() = delete;
   ComputeApplication(const std::string input_filepath,
@@ -165,9 +175,9 @@ public:
     printf("Create DescriptorSet.\n");
     createComputePipeline();
     printf("Create Pipeline.\n");
-
-#if 0
     createCommandBuffer();
+    printf("Create Command Buffer\n");
+#if 0
 
     // Finally, run the recorded command buffer.
     runCommandBuffer();
@@ -413,7 +423,7 @@ public:
       if (IsDeviceSuitable(
               device)) {  // 一番最初に条件を満たすデバイスを見つけたらそれを選択
         physical_device_ = device;
-        found_device   = true;
+        found_device     = true;
         break;
       }
     }
@@ -484,13 +494,13 @@ public:
   uint32_t getComputeQueueFamilyIndex() {
     uint32_t queueFamilyCount;
 
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queueFamilyCount,
-                                             NULL);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_,
+                                             &queueFamilyCount, NULL);
 
     // Retrieve all queue families.
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queueFamilyCount,
-                                             queueFamilies.data());
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        physical_device_, &queueFamilyCount, queueFamilies.data());
 
     // Now find a family that supports compute.
     uint32_t i = 0;
@@ -986,8 +996,8 @@ public:
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shader_stage_create_info.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
     shader_stage_create_info.module = compute_shader_module_;
-    shader_stage_create_info.pName  = "main";  // FIXME(anyone)
-    // shader_stage_create_info.pName  = "gaussian_filter3x3_glayscale";
+    // shader_stage_create_info.pName  = "main";  // FIXME(anyone)
+    shader_stage_create_info.pName = "gaussian_filter3x3_glayscale";
 
     // PipelineLayoutはPipelineがdescriptor setにアクセスすることを可能にする
     // よって先に作ったdescriptor set layoutを指定する
@@ -998,15 +1008,13 @@ public:
     pipeline_layout_create_info.pSetLayouts    = &descriptor_set_layout_;
 
     // 更に __globalでない引数は push constantsを用いて与えるのでその設定を行う
-    struct MyPushConstant {
-      uint32_t w;
-      uint32_t h;
-      float sigma;
-    };
-    MyPushConstant my_push_constant;
-    my_push_constant.w     = input_img_width_;
-    my_push_constant.h     = input_img_height_;
-    my_push_constant.sigma = 1.0f;
+
+    // PipelineLayoutで使用されるpush constantsのrangeを定義。
+    // 仕様では128 bitまでの大きさに対応となっているので、
+    // それより大きい場合はBufferを使うべき
+    //
+    // 具体的な値を指定する必要はない(Command Bufferの作成時に行う)
+    MyPushConstant my_push_constant = {};
 
     VkPushConstantRange push_constant;
     push_constant.offset = 0;  // オフセット
@@ -1041,7 +1049,6 @@ public:
         /*VkPipeline *pPipelines                         */ &pipeline_));
   }
 
-#if 0
   void createCommandBuffer() {
     /*
     We are getting closer to the end. In order to send commands to the
@@ -1096,9 +1103,19 @@ public:
     The validation layer will NOT give warnings if you forget these, so be very
     careful not to forget them.
     */
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                            pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
+                            pipeline_layout_, 0, 1, &descriptor_set_, 0, NULL);
+
+    MyPushConstant my_push_constant;
+    my_push_constant.w     = input_img_width_;
+    my_push_constant.h     = input_img_height_;
+    my_push_constant.sigma = 1.0f;
+
+    // Push Constantの値をセットするコマンドをBufferに渡す
+    vkCmdPushConstants(commandBuffer, pipeline_layout_,
+                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(MyPushConstant),
+                       &my_push_constant);
 
     /*
     Calling vkCmdDispatch basically starts the compute pipeline, and executes
@@ -1112,7 +1129,6 @@ public:
     VK_CHECK_RESULT(
         vkEndCommandBuffer(commandBuffer));  // end recording commands.
   }
-#endif
 
   void runCommandBuffer() {
     /*
@@ -1185,6 +1201,8 @@ public:
     vkDestroyPipelineLayout(device, pipeline_layout_, NULL);
     vkDestroyPipeline(device, pipeline_, NULL);
 
+    // command pool
+    vkDestroyCommandPool(device, commandPool, NULL);
 #if 0
     vkDestroyShaderModule(device, computeShaderModule, NULL);
     vkDestroyDescriptorPool(device, descriptorPool, NULL);
