@@ -4,6 +4,7 @@
 #include <vulkan/vulkan.h>
 
 #include <cmath>
+#include <iostream>
 #include <stdexcept>
 #include <vector>
 
@@ -65,9 +66,9 @@ private:
 
   We will be creating a simple compute pipeline in this application.
   */
-  VkPipeline pipeline;
-  VkPipelineLayout pipelineLayout;
-  VkShaderModule computeShaderModule;
+  VkPipeline pipeline_;
+  VkPipelineLayout pipeline_layout_;
+  VkShaderModule compute_shader_module_;
 
   /*
   The command buffer is used to record commands, that will be submitted to a
@@ -87,17 +88,18 @@ private:
   organized into descriptor sets, which are basically just collections of
   descriptors.
   */
-  VkDescriptorPool descriptorPool;
-  VkDescriptorSet descriptorSet;
-  VkDescriptorSetLayout descriptorSetLayout;
+  VkDescriptorPool descriptor_pool_;
+  VkDescriptorSet descriptor_set_;
+  VkDescriptorSetLayout descriptor_set_layout_;
 
   /*
-  The mandelbrot set will be rendered to this buffer.
+  buffer
 
   The memory that backs the buffer is bufferMemory.
   */
-  VkBuffer buffer;
-  VkDeviceMemory bufferMemory;
+  VkBuffer src_buffer_, dst_buffer_;
+  VkDeviceSize src_buffer_size_, dst_buffer_size_;
+  VkDeviceMemory src_buffer_memory_, dst_buffer_memory_;
 
   uint32_t bufferSize;  // size of `buffer` in bytes.
 
@@ -124,20 +126,38 @@ private:
   */
   uint32_t queueFamilyIndex;
 
+  // other ////////////
+  const std::string input_filepath_;
+  const std::string output_filepath_;
+
+  std::vector<unsigned char> input_img_buf_;
+  uint32_t input_img_width_;
+  uint32_t input_img_height_;
+
 public:
+  ComputeApplication() = delete;
+  ComputeApplication(const std::string input_filepath,
+                     const std::string output_filepath);
   void run() {
     // Buffer size of the storage buffer that will contain the rendered
     // mandelbrot set.
     bufferSize = sizeof(Pixel) * WIDTH * HEIGHT;
+
+    loadSrcPng();
 
     // Initialize vulkan:
     createInstance();
     findPhysicalDevice();
     createDevice();
     createBuffer();
+    std::cout << "Create Buffer." << std::endl;
     createDescriptorSetLayout();
+    std::cout << "Create DescriptorSetLayout." << std::endl;
     createDescriptorSet();
+    std::cout << "Create DescriptorSet." << std::endl;
     createComputePipeline();
+    std::cout << "Create Pipeline." << std::endl;
+#if 0
     createCommandBuffer();
 
     // Finally, run the recorded command buffer.
@@ -147,10 +167,24 @@ public:
     // Save that buffer as a png on disk.
     saveRenderedImage();
 
+#endif
     // Clean up all vulkan resources.
     cleanup();
   }
 
+  void loadSrcPng(void) {
+    unsigned width, height;
+    unsigned error =
+        lodepng::decode(input_img_buf_, width, height, input_filepath_);
+    if (error) {
+      std::runtime_error("Faild to load image. (" + input_filepath_ + ")");
+    }
+
+    std::cout << "Input image is loaded. (" + input_filepath_ + ")"
+              << std::endl;
+  }
+
+#if 0
   void saveRenderedImage() {
     void* mappedMemory = NULL;
     // Map the buffer memory, so that we can read from it on the CPU.
@@ -174,6 +208,7 @@ public:
     unsigned error = lodepng::encode("mandelbrot.png", image, WIDTH, HEIGHT);
     if (error) printf("encoder error %d: %s", error, lodepng_error_text(error));
   }
+#endif
 
   static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
       VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType,
@@ -473,165 +508,288 @@ public:
 
   void createBuffer() {
     /*
-    We will now create a buffer. We will render the mandelbrot set into this
-    buffer in a computer shade later.
+    We will now create a buffer.
     */
 
-    VkBufferCreateInfo bufferCreateInfo = {};
-    bufferCreateInfo.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferCreateInfo.size               = bufferSize;  // buffer size in bytes.
-    bufferCreateInfo.usage =
+    /////////////////// src(input) buffer ////////////////////////////////////
+    VkBufferCreateInfo src_buffer_create_info = {};
+    src_buffer_size_ =
+        sizeof(decltype(input_img_buf_)::value_type) * input_img_buf_.size();
+    src_buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    src_buffer_create_info.size  = src_buffer_size_;
+    src_buffer_create_info.usage =
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;  // buffer is used as a storage
                                              // buffer.
-    bufferCreateInfo.sharingMode =
+    src_buffer_create_info.sharingMode =
+        VK_SHARING_MODE_EXCLUSIVE;  // buffer is exclusive to a single queue
+                                    // family at a time.
+                                    //
+    VK_CHECK_RESULT(vkCreateBuffer(device, &src_buffer_create_info, NULL,
+                                   &src_buffer_));  // create buffer.
+
+    //バッファ自身でメモリを確保しないので、手動で確保する必要がある
+
+    // まずバッファが要求するメモリ要件を調べる
+    VkMemoryRequirements src_memory_requirements;
+    vkGetBufferMemoryRequirements(
+        /*VkDevice device                          =*/device,
+        /*VkBuffer buffer                          =*/src_buffer_,
+        /*VkMemoryRequirements *pMemoryRequirements=*/&src_memory_requirements);
+
+    // バッファのためメモリ確保のためにメモリ要件を用いる
+    VkMemoryAllocateInfo src_allocate_info = {};
+    src_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    src_allocate_info.allocationSize =
+        src_memory_requirements.size;  // 要求されたメモリを指定する
+
+    // 確保できるメモリにはいくつか種類があり、選択する必要がある
+    //
+    // 1) メモリ要件を満たすもの(memory_requirements.memoryTypeBit)
+    // 2) このプログラムの用途を満たすもの
+    //
+    //  (vkMapMemoryを使ってCPUからGPUにバッファメモリを読み込めるようするため、
+    //   VK_MEMORY_PROPERTY_HOST_VISIBLE_BITを設定する)
+    src_allocate_info.memoryTypeIndex =
+        findMemoryType(src_memory_requirements.memoryTypeBits,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+    // デバイス上のメモリを確保する
+    VK_CHECK_RESULT(vkAllocateMemory(
+        /*VkDevice device                          =*/device,
+        /*const VkMemoryAllocateInfo *pAllocateInfo=*/&src_allocate_info,
+        /*const VkAllocationCallbacks *pAllocator  =*/
+        nullptr,  // ここにアロケータを渡すとCPUメモリも確保できる
+        /*VkDeviceMemory *pMemory                  =*/&src_buffer_memory_));
+
+    // 確保したメモリとバッファを関連付ける
+    // これによって実際のメモリによってバッファが使えるようになる
+    VK_CHECK_RESULT(
+        vkBindBufferMemory(/*VkDevice device          =*/device,
+                           /*VkBuffer buffer          =*/src_buffer_,
+                           /*VkDeviceMemory memory    =*/src_buffer_memory_,
+                           /*VkDeviceSize memoryOffset=*/0))
+    /////////////////// dst(output) buffer ///////////////////////////////////
+    VkBufferCreateInfo dst_buffer_create_info = {};
+    dst_buffer_size_ =
+        sizeof(decltype(input_img_buf_)::value_type) *
+        input_img_buf_.size();  // Output is the same size as input.
+
+    dst_buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    dst_buffer_create_info.size  = dst_buffer_size_,
+    dst_buffer_create_info.usage =
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;  // buffer is used as a storage
+                                             // buffer.
+    dst_buffer_create_info.sharingMode =
         VK_SHARING_MODE_EXCLUSIVE;  // buffer is exclusive to a single queue
                                     // family at a time.
 
-    VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, NULL,
-                                   &buffer));  // create buffer.
+    VK_CHECK_RESULT(vkCreateBuffer(device, &dst_buffer_create_info, NULL,
+                                   &dst_buffer_));  // create buffer.
 
-    /*
-    But the buffer doesn't allocate memory for itself, so we must do that
-    manually.
-    */
+    //バッファ自身でメモリを確保しないので、手動で確保する必要がある
 
-    /*
-    First, we find the memory requirements for the buffer.
-    */
-    VkMemoryRequirements memoryRequirements;
-    vkGetBufferMemoryRequirements(device, buffer, &memoryRequirements);
+    // まずバッファが要求するメモリ要件を調べる
+    VkMemoryRequirements dst_memory_requirements;
+    vkGetBufferMemoryRequirements(
+        /*VkDevice device                          =*/device,
+        /*VkBuffer buffer                          =*/dst_buffer_,
+        /*VkMemoryRequirements *pMemoryRequirements=*/&dst_memory_requirements);
 
-    /*
-    Now use obtained memory requirements info to allocate the memory for the
-    buffer.
-    */
-    VkMemoryAllocateInfo allocateInfo = {};
-    allocateInfo.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocateInfo.allocationSize =
-        memoryRequirements.size;  // specify required memory.
-    /*
-    There are several types of memory that can be allocated, and we must choose
-    a memory type that:
+    // バッファのためメモリ確保のためにメモリ要件を用いる
+    VkMemoryAllocateInfo dst_allocate_info = {};
+    dst_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    dst_allocate_info.allocationSize =
+        dst_memory_requirements.size;  // 要求されたメモリを指定する
 
-    1) Satisfies the memory requirements(memoryRequirements.memoryTypeBits).
-    2) Satifies our own usage requirements. We want to be able to read the
-    buffer memory from the GPU to the CPU with vkMapMemory, so we set
-    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT. Also, by setting
-    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, memory written by the device(GPU) will
-    be easily visible to the host(CPU), without having to call any extra
-    flushing commands. So mainly for convenience, we set this flag.
-    */
-    allocateInfo.memoryTypeIndex =
-        findMemoryType(memoryRequirements.memoryTypeBits,
+    // 確保できるメモリにはいくつか種類があり、選択する必要がある
+    //
+    // 1) メモリ要件を満たすもの(memory_requirements.memoryTypeBit)
+    // 2) このプログラムの用途を満たすもの
+    //
+    //  (vkMapMemoryを使ってGPUからCPUにバッファメモリを読み込めるようするため、
+    //   VK_MEMORY_PROPERTY_HOST_VISIBLE_BITを設定する)
+    //
+    // また、VK_MEMORY_PROPERTY_HOST_COHERENT_BITを設定しておくと、
+    // デバイス（GPU）によって書き込まれたメモリは、余分なフラッシュコマンドを呼び出さなくても、
+    // ホスト（CPU）から簡単に見えるようになる
+    // 従って、便利なので、このフラグを設定する。
+    dst_allocate_info.memoryTypeIndex =
+        findMemoryType(dst_memory_requirements.memoryTypeBits,
                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
 
-    VK_CHECK_RESULT(
-        vkAllocateMemory(device, &allocateInfo, NULL,
-                         &bufferMemory));  // allocate memory on device.
+    // デバイス上のメモリを確保する
+    VK_CHECK_RESULT(vkAllocateMemory(
+        /*VkDevice device                          =*/device,
+        /*const VkMemoryAllocateInfo *pAllocateInfo=*/&dst_allocate_info,
+        /*const VkAllocationCallbacks *pAllocator  =*/
+        nullptr,  // ここにアロケータを渡すとCPUメモリも確保できる
+        /*VkDeviceMemory *pMemory                  =*/&dst_buffer_memory_));
 
-    // Now associate that allocated memory with the buffer. With that, the
-    // buffer is backed by actual memory.
-    VK_CHECK_RESULT(vkBindBufferMemory(device, buffer, bufferMemory, 0));
+    VK_CHECK_RESULT(
+        vkBindBufferMemory(/*VkDevice device          =*/device,
+                           /*VkBuffer buffer          =*/dst_buffer_,
+                           /*VkDeviceMemory memory    =*/dst_buffer_memory_,
+                           /*VkDeviceSize memoryOffset=*/0))
   }
 
   void createDescriptorSetLayout() {
-    /*
-    Here we specify a descriptor set layout. This allows us to bind our
-    descriptors to resources in the shader.
+    // この関数で  descriptor setのレイアウトを指定する
+    // これは descriptorとシェーダーのリソースを結びつけることを可能にする
 
-    */
+    // binding point 0と1に紐付けるVK_DESCRIPTOR_TYPE_STORAGE_BUFFERを指定する
+    // これはcompute shader の
+    //
+    // layout(set=*, binding = 0) buffer buf
+    //
+    // に結び付けられる
+    //
+    // dst -> 0
+    // src -> 1
 
-    /*
-    Here we specify a binding of type VK_DESCRIPTOR_TYPE_STORAGE_BUFFER to the
-    binding point 0. This binds to
+    std::vector<VkDescriptorSetLayoutBinding>
+        bindings;  // ここにVkDescriptorSetLayoutBindingを入れてVkDescriptorSetLayoutCreateInfo
+                   // に渡す
 
-      layout(std140, binding = 0) buffer buf
-
-    in the compute shader.
-    */
-    VkDescriptorSetLayoutBinding descriptorSetLayoutBinding = {};
-    descriptorSetLayoutBinding.binding                      = 0;  // binding = 0
-    descriptorSetLayoutBinding.descriptorType =
+    VkDescriptorSetLayoutBinding dst_descriptor_set_layout_binding = {};
+    dst_descriptor_set_layout_binding.binding = 0;  // binding = 0
+    dst_descriptor_set_layout_binding.descriptorType =
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    descriptorSetLayoutBinding.descriptorCount = 1;
-    descriptorSetLayoutBinding.stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+    dst_descriptor_set_layout_binding.descriptorCount = 1;
+    dst_descriptor_set_layout_binding.stageFlags =
+        VK_SHADER_STAGE_COMPUTE_BIT;  // Computeシェーダーで利用できるようにする
+    bindings.emplace_back(dst_descriptor_set_layout_binding);
+
+    VkDescriptorSetLayoutBinding src_descriptor_set_layout_binding = {};
+    src_descriptor_set_layout_binding.binding = 1;  // binding = 1
+    src_descriptor_set_layout_binding.descriptorType =
+        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    src_descriptor_set_layout_binding.descriptorCount = 1;
+    src_descriptor_set_layout_binding.stageFlags =
+        VK_SHADER_STAGE_COMPUTE_BIT;  // Computeシェーダーで利用できるようにする
+    bindings.emplace_back(src_descriptor_set_layout_binding);
 
     VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
     descriptorSetLayoutCreateInfo.sType =
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     descriptorSetLayoutCreateInfo.bindingCount =
-        1;  // only a single binding in this descriptor set layout.
-    descriptorSetLayoutCreateInfo.pBindings = &descriptorSetLayoutBinding;
+        bindings.size();  // VkDescriptorSetLayoutBindingの数
+    descriptorSetLayoutCreateInfo.pBindings = bindings.data();
 
-    // Create the descriptor set layout.
+    // Descriptor setを作成する
     VK_CHECK_RESULT(vkCreateDescriptorSetLayout(
-        device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout));
+        device, &descriptorSetLayoutCreateInfo, NULL, &descriptor_set_layout_));
   }
 
   void createDescriptorSet() {
-    /*
-    So we will allocate a descriptor set here.
-    But we need to first create a descriptor pool to do that.
-    */
+    // この関数でdescriptor setを確保する
+    // まずdescriptor poolを作る
+    //
+    // bindingするbufferの数以上のpool sizeを作る
+    std::vector<VkDescriptorPoolSize> pool_sizes;
 
-    /*
-    Our descriptor pool can only allocate a single storage buffer.
-    */
-    VkDescriptorPoolSize descriptorPoolSize = {};
-    descriptorPoolSize.type                 = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    descriptorPoolSize.descriptorCount      = 1;
+    // dst
+    pool_sizes.emplace_back();  // 追加
+    VkDescriptorPoolSize& dst_descriptor_pool_size =
+        pool_sizes.back();  // 追加したものへの参照
+    dst_descriptor_pool_size.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    dst_descriptor_pool_size.descriptorCount = 1;
 
-    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
-    descriptorPoolCreateInfo.sType =
+    // src
+    pool_sizes.emplace_back();  //追加
+    VkDescriptorPoolSize& src_descriptor_pool_size =
+        pool_sizes.back();  // 追加したものへの参照
+    src_descriptor_pool_size.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    src_descriptor_pool_size.descriptorCount = 1;
+
+    // Pool作成の情報
+    VkDescriptorPoolCreateInfo descriptor_pool_create_info = {};
+    descriptor_pool_create_info.sType =
         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    descriptorPoolCreateInfo.maxSets =
-        1;  // we only need to allocate one descriptor set from the pool.
-    descriptorPoolCreateInfo.poolSizeCount = 1;
-    descriptorPoolCreateInfo.pPoolSizes    = &descriptorPoolSize;
+    descriptor_pool_create_info.maxSets =
+        1;  //  // poolから1つのdescriptor setを確保すれば良い
+    descriptor_pool_create_info.poolSizeCount = pool_sizes.size();
+    descriptor_pool_create_info.pPoolSizes    = pool_sizes.data();
 
-    // create descriptor pool.
-    VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolCreateInfo,
-                                           NULL, &descriptorPool));
+    // Descriptor poolを作成する
+    VK_CHECK_RESULT(vkCreateDescriptorPool(
+        /*VkDevice device                              =*/device,
+        /*const VkDescriptorPoolCreateInfo *pCreateInfo=*/
+        &descriptor_pool_create_info,
+        /*const VkAllocationCallbacks *pAllocator      =*/nullptr,
+        /*VkDescriptorPool *pDescriptorPool            =*/&descriptor_pool_));
 
-    /*
-    With the pool allocated, we can now allocate the descriptor set.
-    */
-    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
-    descriptorSetAllocateInfo.sType =
+    // Poolが確保されたら、descriptor setをallocateする
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {};
+    descriptor_set_allocate_info.sType =
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    descriptorSetAllocateInfo.descriptorPool =
-        descriptorPool;  // pool to allocate from.
-    descriptorSetAllocateInfo.descriptorSetCount =
-        1;  // allocate a single descriptor set.
-    descriptorSetAllocateInfo.pSetLayouts = &descriptorSetLayout;
+    descriptor_set_allocate_info.descriptorPool =
+        descriptor_pool_;  // どのプールから確保するか
+    descriptor_set_allocate_info.descriptorSetCount =
+        1;  // 一つのdescriptor setを確保する
+    descriptor_set_allocate_info.pSetLayouts =
+        &descriptor_set_layout_;  // レイアウトを指定
 
     // allocate descriptor set.
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo,
-                                             &descriptorSet));
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(
+        /*VkDevice device                                 =*/device,
+        /*const VkDescriptorSetAllocateInfo *pAllocateInfo=*/
+        &descriptor_set_allocate_info,
+        /*VkDescriptorSet *pDescriptorSets                =*/&descriptor_set_));
 
-    /*
-    Next, we need to connect our actual storage buffer with the descrptor.
-    We use vkUpdateDescriptorSets() to update the descriptor set.
-    */
+    //  descriptorとストレージバッファを紐付ける
+    //  descriptorのsetを更新するために vkUpdateDescriptorSets()関数を用いる
 
-    // Specify the buffer to bind to the descriptor.
-    VkDescriptorBufferInfo descriptorBufferInfo = {};
-    descriptorBufferInfo.buffer                 = buffer;
-    descriptorBufferInfo.offset                 = 0;
-    descriptorBufferInfo.range                  = bufferSize;
+    // descriptor setに書き込むものをセットしていく
+    std::vector<VkWriteDescriptorSet> write_descriptor_sets;
 
-    VkWriteDescriptorSet writeDescriptorSet = {};
-    writeDescriptorSet.sType  = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writeDescriptorSet.dstSet = descriptorSet;  // write to this descriptor set.
-    writeDescriptorSet.dstBinding = 0;  // write to the first, and only binding.
-    writeDescriptorSet.descriptorCount = 1;  // update a single descriptor.
-    writeDescriptorSet.descriptorType =
+    // descriptorに結びつけるバッファを指定する(dst)
+    write_descriptor_sets.emplace_back();             //追加
+    VkWriteDescriptorSet& dst_write_descriptor_set =  //追加したものへの参照
+        write_descriptor_sets.back();
+
+    VkDescriptorBufferInfo dst_descriptor_buffer_info = {};
+    dst_descriptor_buffer_info.buffer                 = dst_buffer_;
+    dst_descriptor_buffer_info.offset = 0;  // オフセットはなし
+    dst_descriptor_buffer_info.range  = dst_buffer_size_;
+
+    dst_write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    dst_write_descriptor_set.dstSet =
+        descriptor_set_;  //  書き込むdescriptor set
+    dst_write_descriptor_set.dstBinding      = 0;  // binding=0に紐付ける
+    dst_write_descriptor_set.descriptorCount = 1;
+    dst_write_descriptor_set.descriptorType =
         VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;  // storage buffer.
-    writeDescriptorSet.pBufferInfo = &descriptorBufferInfo;
+    dst_write_descriptor_set.pBufferInfo = &dst_descriptor_buffer_info;
 
-    // perform the update of the descriptor set.
-    vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
+    // descriptorに結びつけるバッファを指定する(src)
+    write_descriptor_sets.emplace_back();             //追加
+    VkWriteDescriptorSet& src_write_descriptor_set =  // 追加したものへの参照
+        write_descriptor_sets.back();
+
+    VkDescriptorBufferInfo src_descriptor_buffer_info = {};
+    src_descriptor_buffer_info.buffer                 = src_buffer_;
+    src_descriptor_buffer_info.offset = 0;  // オフセットはなし
+    src_descriptor_buffer_info.range  = src_buffer_size_;
+
+    src_write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    src_write_descriptor_set.dstSet =
+        descriptor_set_;  //  書き込むdescriptor set
+    src_write_descriptor_set.dstBinding      = 1;  // binding=1に紐付ける
+    src_write_descriptor_set.descriptorCount = 1;
+    src_write_descriptor_set.descriptorType =
+        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;  // storage buffer.
+    src_write_descriptor_set.pBufferInfo = &src_descriptor_buffer_info;
+
+    // descriptor setの更新を行う
+    vkUpdateDescriptorSets(
+        /*VkDevice device                              =*/device,
+        /*uint32_t descriptorWriteCount                =*/
+        write_descriptor_sets.size(),
+        /*const VkWriteDescriptorSet *pDescriptorWrites=*/
+        write_descriptor_sets.data(),
+        /*uint32_t descriptorCopyCount                 =*/0,  // コピーはしない
+        /*const VkCopyDescriptorSet *pDescriptorCopies =*/nullptr);
   }
 
   // Read file into array of bytes, and cast to uint32_t*, then return.
@@ -664,65 +822,87 @@ public:
   }
 
   void createComputePipeline() {
-    /*
-    We create a compute pipeline here.
-    */
+    // この関数でcompute pipeline を作る
 
-    /*
-    Create a shader module. A shader module basically just encapsulates some
-    shader code.
-    */
-    uint32_t filelength;
-    // the code in mandelbrot.spv was created by running the command:
-    // glslangValidator.exe -V shader.comp
-    uint32_t* code = readFile(filelength, "spirv/c/mandelbrot.spv");
-    VkShaderModuleCreateInfo createInfo = {};
-    createInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    createInfo.pCode    = code;
-    createInfo.codeSize = filelength;
+    // まずSPIR-Vからshader modelを作成する
+    uint32_t file_length;
+    uint32_t* code = readFile(file_length, "./spirv/c/gaussian_filter.spv");
 
-    VK_CHECK_RESULT(
-        vkCreateShaderModule(device, &createInfo, NULL, &computeShaderModule));
+    VkShaderModuleCreateInfo create_info = {};
+    create_info.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    create_info.pCode    = code;
+    create_info.codeSize = file_length;
+    VK_CHECK_RESULT(vkCreateShaderModule(device, &create_info, nullptr,
+                                         &compute_shader_module_));
     delete[] code;
 
-    /*
-    Now let us actually create the compute pipeline.
-    A compute pipeline is very simple compared to a graphics pipeline.
-    It only consists of a single stage with a compute shader.
-
-    So first we specify the compute shader stage, and it's entry point(main).
-    */
-    VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
-    shaderStageCreateInfo.sType =
+    // 次にcomputeパイプラインを作る
+    // graphicsパイプラインよりcomputeパイプラインはシンプルである
+    // compute shaderは一つのステージのみである
+    //
+    // まずcomputeシェーダーのステージを指定する
+    // エントリーポイントは gaussian_filter3x3_glayscale
+    VkPipelineShaderStageCreateInfo shader_stage_create_info = {};
+    shader_stage_create_info.sType =
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shaderStageCreateInfo.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
-    shaderStageCreateInfo.module = computeShaderModule;
-    shaderStageCreateInfo.pName  = "main";
+    shader_stage_create_info.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+    shader_stage_create_info.module = compute_shader_module_;
+    shader_stage_create_info.pName  = "main";  // FIXME(anyone)
+    // shader_stage_create_info.pName  = "gaussian_filter3x3_glayscale";
 
-    /*
-    The pipeline layout allows the pipeline to access descriptor sets.
-    So we just specify the descriptor set layout we created earlier.
-    */
-    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-    pipelineLayoutCreateInfo.sType =
+    // PipelineLayoutはPipelineがdescriptor setにアクセスすることを可能にする
+    // よって先に作ったdescriptor set layoutを指定する
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
+    pipeline_layout_create_info.sType =
         VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutCreateInfo.setLayoutCount = 1;
-    pipelineLayoutCreateInfo.pSetLayouts    = &descriptorSetLayout;
-    VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo,
-                                           NULL, &pipelineLayout));
+    pipeline_layout_create_info.setLayoutCount = 1;
+    pipeline_layout_create_info.pSetLayouts    = &descriptor_set_layout_;
 
-    VkComputePipelineCreateInfo pipelineCreateInfo = {};
-    pipelineCreateInfo.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-    pipelineCreateInfo.stage  = shaderStageCreateInfo;
-    pipelineCreateInfo.layout = pipelineLayout;
+    // 更に __globalでない引数は push constantsを用いて与えるのでその設定を行う
+    struct MyPushConstant {
+      uint32_t w;
+      uint32_t h;
+      float sigma;
+    };
+    MyPushConstant my_push_constant;
+    my_push_constant.w     = input_img_width_;
+    my_push_constant.h     = input_img_height_;
+    my_push_constant.sigma = 1.0f;
 
-    /*
-    Now, we finally create the compute pipeline.
-    */
+    VkPushConstantRange push_constant;
+    push_constant.offset = 0;  // オフセット
+    push_constant.size   = sizeof(MyPushConstant);
+    push_constant.stageFlags =
+        VK_SHADER_STAGE_COMPUTE_BIT;  // Compute shaderで利用
+
+    pipeline_layout_create_info.pPushConstantRanges    = &push_constant;
+    pipeline_layout_create_info.pushConstantRangeCount = 1;
+
+    // PipelineLayoutを作成する
+    VK_CHECK_RESULT(vkCreatePipelineLayout(
+        /*VkDevice device                              =*/device,
+        /*const VkPipelineLayoutCreateInfo *pCreateInfo=*/
+        &pipeline_layout_create_info,
+        /*const VkAllocationCallbacks *pAllocator      =*/nullptr,
+        /*VkPipelineLayout *pPipelineLayout            =*/&pipeline_layout_));
+
+    VkComputePipelineCreateInfo pipeline_create_info = {};
+    pipeline_create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipeline_create_info.stage = shader_stage_create_info;
+    pipeline_create_info.layout = pipeline_layout_;
+
+    // 最後にcomputeパイプラインを作成する
     VK_CHECK_RESULT(vkCreateComputePipelines(
-        device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &pipeline));
+        /*VkDevice device                                */ device,
+        /*VkPipelineCache pipelineCache                  */ VK_NULL_HANDLE,
+        /*uint32_t createInfoCount                       */ 1,
+        /*const VkComputePipelineCreateInfo *pCreateInfos*/
+        &pipeline_create_info,
+        /*const VkAllocationCallbacks *pAllocator        */ nullptr,
+        /*VkPipeline *pPipelines                         */ &pipeline_));
   }
 
+#if 0
   void createCommandBuffer() {
     /*
     We are getting closer to the end. In order to send commands to the
@@ -793,6 +973,7 @@ public:
     VK_CHECK_RESULT(
         vkEndCommandBuffer(commandBuffer));  // end recording commands.
   }
+#endif
 
   void runCommandBuffer() {
     /*
@@ -846,21 +1027,41 @@ public:
       func(instance, debugReportCallback, NULL);
     }
 
-    vkFreeMemory(device, bufferMemory, NULL);
-    vkDestroyBuffer(device, buffer, NULL);
+    // Buffer Memory
+    // // src buffer
+    vkFreeMemory(device, src_buffer_memory_, nullptr);
+    vkDestroyBuffer(device, src_buffer_, nullptr);
+    // // dst buffer
+    vkFreeMemory(device, dst_buffer_memory_, nullptr);
+    vkDestroyBuffer(device, dst_buffer_, nullptr);
+
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout_, nullptr);
+    vkDestroyDescriptorPool(device, descriptor_pool_, nullptr);
+
+    vkDestroyPipelineLayout(device, pipeline_layout_, NULL);
+    vkDestroyPipeline(device, pipeline_, NULL);
+
+#if 0
     vkDestroyShaderModule(device, computeShaderModule, NULL);
     vkDestroyDescriptorPool(device, descriptorPool, NULL);
-    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout_, nullptr);
     vkDestroyPipelineLayout(device, pipelineLayout, NULL);
     vkDestroyPipeline(device, pipeline, NULL);
     vkDestroyCommandPool(device, commandPool, NULL);
+#endif
     vkDestroyDevice(device, NULL);
     vkDestroyInstance(instance, NULL);
   }
 };
 
+ComputeApplication::ComputeApplication(const std::string input_filepath,
+                                       const std::string output_filepath)
+    : input_filepath_(input_filepath), output_filepath_(output_filepath) {}
+
 int main() {
-  ComputeApplication app;
+  const std::string input_filepath  = "src.png";
+  const std::string output_filepath = "dst.png";
+  ComputeApplication app(input_filepath, output_filepath);
 
   try {
     app.run();
