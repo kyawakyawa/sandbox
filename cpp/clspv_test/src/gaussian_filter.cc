@@ -4,8 +4,8 @@
 #include <vulkan/vulkan.h>
 
 #include <cmath>
-#include <iostream>
 #include <stdexcept>
+#include <unordered_set>
 #include <vector>
 
 #include "lodepng.h"  //Used for png encoding.
@@ -53,12 +53,20 @@ private:
   The physical device is some device on the system that supports usage of
   Vulkan. Often, it is simply a graphics card that supports Vulkan.
   */
-  VkPhysicalDevice physicalDevice;
+  VkPhysicalDevice physical_device_;
   /*
   Then we have the logical device VkDevice, which basically allows
   us to interact with the physical device.
   */
   VkDevice device;
+
+  // clang-format off
+  const std::vector<const char*> device_extensions_ = {
+      VK_KHR_8BIT_STORAGE_EXTENSION_NAME,  // shader interfaceに8bitの型用いる
+      VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME  // shader内で8bit intをもちいる 
+                                                 // (SPIR-Vで OpCapability Int8を使えるようにする)
+  };
+  // clang-format on
 
   /*
   The pipeline specifies the pipeline that all graphics and compute commands
@@ -150,13 +158,14 @@ public:
     findPhysicalDevice();
     createDevice();
     createBuffer();
-    std::cout << "Create Buffer." << std::endl;
+    printf("Create Buffer.\n");
     createDescriptorSetLayout();
-    std::cout << "Create DescriptorSetLayout." << std::endl;
+    printf("Create DescriptorSetLayout.\n");
     createDescriptorSet();
-    std::cout << "Create DescriptorSet." << std::endl;
+    printf("Create DescriptorSet.\n");
     createComputePipeline();
-    std::cout << "Create Pipeline." << std::endl;
+    printf("Create Pipeline.\n");
+
 #if 0
     createCommandBuffer();
 
@@ -180,8 +189,7 @@ public:
       std::runtime_error("Faild to load image. (" + input_filepath_ + ")");
     }
 
-    std::cout << "Input image is loaded. (" + input_filepath_ + ")"
-              << std::endl;
+    printf("Input image is loaded. (%s)\n", input_filepath_.c_str());
   }
 
 #if 0
@@ -302,8 +310,8 @@ public:
     applicationInfo.applicationVersion = 0;
     applicationInfo.pEngineName        = "awesomeengine";
     applicationInfo.engineVersion      = 0;
-    applicationInfo.apiVersion         = VK_API_VERSION_1_0;
-    ;
+    applicationInfo.apiVersion =
+        VK_API_VERSION_1_1;  // VkPhysicalDeviceFeatures2の利用のため
 
     VkInstanceCreateInfo createInfo = {};
     createInfo.sType                = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -399,24 +407,89 @@ public:
     into account.
 
     */
+
+    bool found_device = false;
     for (VkPhysicalDevice device : devices) {
-      if (true) {  // As above stated, we do no feature checks, so just accept.
-        physicalDevice = device;
+      if (IsDeviceSuitable(
+              device)) {  // 一番最初に条件を満たすデバイスを見つけたらそれを選択
+        physical_device_ = device;
+        found_device   = true;
         break;
       }
     }
+    if (!found_device) {
+      throw std::runtime_error("Physical Device not found\n");
+    }
+  }
+
+  bool IsDeviceSuitable(VkPhysicalDevice device) {
+    VkPhysicalDeviceProperties device_properties;
+    VkPhysicalDeviceFeatures device_features;
+
+    vkGetPhysicalDeviceProperties(device, &device_properties);
+    vkGetPhysicalDeviceFeatures(device, &device_features);
+
+    // グラフィックカードか？
+    const bool condition0 =
+        /* グラフィックカード */
+        device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ||
+        /* 統合GPU */
+        device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+
+#ifndef NDEBUG
+    if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+      printf("グラフィックカードが検出されました\n");
+    } else if (device_properties.deviceType ==
+               VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU) {
+      printf("統合GPUが検出されました\n");
+    }
+#endif
+
+    // 拡張機能に対応しているか
+    const bool extensions_supported = CheckDeviceExtensionSupport(device);
+
+    return condition0 && extensions_supported;
+  }
+  bool CheckDeviceExtensionSupport(const VkPhysicalDevice device) {
+    uint32_t extension_count;
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count,
+                                         nullptr);
+
+    std::vector<VkExtensionProperties> available_extensions(extension_count);
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count,
+                                         available_extensions.data());
+
+    std::unordered_set<std::string> required_extensions(
+        device_extensions_.begin(), device_extensions_.end());
+
+#ifndef NDEBUG
+    printf("----- Available Extensions -----\n");
+    for (const auto& extension : available_extensions) {
+      printf("     -- %s\n", extension.extensionName);
+    }
+#endif
+
+    for (const auto& extension : available_extensions) {
+      required_extensions.erase(extension.extensionName);
+    }
+
+    for (const auto& extension_name : required_extensions) {
+      fprintf(stderr, "not find Extension : %s\n", extension_name.c_str());
+    }
+
+    return required_extensions.empty();
   }
 
   // Returns the index of a queue family that supports compute operations.
   uint32_t getComputeQueueFamilyIndex() {
     uint32_t queueFamilyCount;
 
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount,
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queueFamilyCount,
                                              NULL);
 
     // Retrieve all queue families.
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount,
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queueFamilyCount,
                                              queueFamilies.data());
 
     // Now find a family that supports compute.
@@ -457,28 +530,94 @@ public:
         1.0;  // we only have one queue, so this is not that imporant.
     queueCreateInfo.pQueuePriorities = &queuePriorities;
 
+    // Device Feature を指定する
+    //
+    // 8bitのshader interfaceに対応するために
+    // VkPhysicalDevice8BitStorageFeaturesを使う
+    VkPhysicalDevice8BitStorageFeatures device_8bit_storage_features = {};
+    device_8bit_storage_features.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES;
+
+    // さらに、SPIR-Vで OpCapability Int8 に対応するために
+    // VkPhysicalDeviceShaderFloat16Int8Features を使う
+    VkPhysicalDeviceShaderFloat16Int8Features
+        device_shader_float16_int8_features = {};
+    device_shader_float16_int8_features.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES;
+
+    // VkPhysicalDevice8BitStorageFeaturesとVkPhysicalDeviceShaderFloat16Int8Features
+    // を調べるためにVkPhysicalDeviceFeatures2を作成
+    // VkPhysicalDeviceFeatures2とVkPhysicalDeviceFeaturesの違いpNextが使えるか使えないか
+    // 既存のVkPhysicalDeviceFeaturesはメンバにある
+    // pNextにVkPhysicalDevice8BitStorageFeaturesを指定
+    // さらにそのpNextにVkPhysicalDeviceShaderFloat16Int8Featuresを指定
+    VkPhysicalDeviceFeatures2 device_features2 = {};
+    device_features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    device_features2.pNext =
+        reinterpret_cast<void*>(&device_8bit_storage_features);
+    device_8bit_storage_features.pNext =
+        reinterpret_cast<void*>(&(device_shader_float16_int8_features));
+
+    // Featureの情報を得る
+    vkGetPhysicalDeviceFeatures2(physical_device_, &device_features2);
+
+#ifndef NDEBUG
+    printf("----- VkPhysicalDevice8BitStorageFeatures -----\n");
+    printf("     - storageBuffer8BitAccess           -> %s.\n",
+           device_8bit_storage_features.storageBuffer8BitAccess ? "OK" : "NO");
+    printf("     - uniformAndStorageBuffer8BitAccess -> %s.\n",
+           device_8bit_storage_features.uniformAndStorageBuffer8BitAccess
+               ? "OK"
+               : "NO");
+    printf("     - storagePushConstant8              -> %s.\n",
+           device_8bit_storage_features.storagePushConstant8 ? "OK" : "NO");
+#endif
+    // 8bitのstrage bufferが利用できない場合、例外を投げる
+    if (!device_8bit_storage_features.storageBuffer8BitAccess) {
+      throw std::runtime_error("Cannot use 8bit strage Buffer\n");
+    }
+
+#ifndef NDEBUG
+    printf("----- VkPhysicalDeviceShaderFloat16Int8Features -----\n");
+    printf("     - shaderFloat16 -> %s.\n",
+           device_shader_float16_int8_features.shaderFloat16 ? "OK" : "NO");
+    printf("     - shaderInt8    -> %s.\n",
+           device_shader_float16_int8_features.shaderInt8 ? "OK" : "NO");
+#endif
+    // SPIR-Vで OpCapability Int8が利用できない場合、例外を投げる
+    if (!device_shader_float16_int8_features.shaderInt8) {
+      throw std::runtime_error("Cannot use OpCapability Int8\n");
+    }
+
     /*
     Now we create the logical device. The logical device allows us to interact
     with the physical device.
     */
-    VkDeviceCreateInfo deviceCreateInfo = {};
+    VkDeviceCreateInfo device_create_info = {};
 
-    // Specify any desired device features here. We do not need any for this
-    // application, though.
-    VkPhysicalDeviceFeatures deviceFeatures = {};
-
-    deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    deviceCreateInfo.enabledLayerCount =
+    device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_create_info.enabledLayerCount =
         enabledLayers
             .size();  // need to specify validation layers here as well.
-    deviceCreateInfo.ppEnabledLayerNames = enabledLayers.data();
-    deviceCreateInfo.pQueueCreateInfos =
+    device_create_info.ppEnabledLayerNames = enabledLayers.data();
+    device_create_info.pQueueCreateInfos =
         &queueCreateInfo;  // when creating the logical device, we also specify
                            // what queues it has.
-    deviceCreateInfo.queueCreateInfoCount = 1;
-    deviceCreateInfo.pEnabledFeatures     = &deviceFeatures;
+    device_create_info.queueCreateInfoCount = 1;
+    device_create_info.pEnabledFeatures     = &(device_features2.features);
 
-    VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL,
+    device_create_info.pNext = &(
+        device_8bit_storage_features);  // VkPhysicalDevice8BitStorageFeaturesはpNextに指定する
+                                        // 先程、VkPhysicalDevice8BitStorageFeaturesの
+                                        // pNextにVkPhysicalDeviceShaderFloat16Int8Featuresも渡したので、
+                                        // そちらもvkCreateDeviceに渡される
+
+    // 拡張を指定
+    device_create_info.enabledExtensionCount =
+        static_cast<uint32_t>(device_extensions_.size());
+    device_create_info.ppEnabledExtensionNames = device_extensions_.data();
+
+    VK_CHECK_RESULT(vkCreateDevice(physical_device_, &device_create_info, NULL,
                                    &device));  // create logical device.
 
     // Get a handle to the only member of the queue family.
@@ -490,7 +629,7 @@ public:
                           VkMemoryPropertyFlags properties) {
     VkPhysicalDeviceMemoryProperties memoryProperties;
 
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device_, &memoryProperties);
 
     /*
     How does this search work?
@@ -1035,9 +1174,14 @@ public:
     vkFreeMemory(device, dst_buffer_memory_, nullptr);
     vkDestroyBuffer(device, dst_buffer_, nullptr);
 
-    vkDestroyDescriptorSetLayout(device, descriptor_set_layout_, nullptr);
-    vkDestroyDescriptorPool(device, descriptor_pool_, nullptr);
+    // shader module
+    vkDestroyShaderModule(device, compute_shader_module_, NULL);
 
+    // descriptor
+    vkDestroyDescriptorPool(device, descriptor_pool_, nullptr);
+    vkDestroyDescriptorSetLayout(device, descriptor_set_layout_, nullptr);
+
+    // pipeline
     vkDestroyPipelineLayout(device, pipeline_layout_, NULL);
     vkDestroyPipeline(device, pipeline_, NULL);
 
