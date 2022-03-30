@@ -62,10 +62,12 @@ cmake_build_debug: cmake_configure_debug
 
 opencl: $(ALL_C_SPIRV)
 
-$(ALL_C_SPIRV):$(ALL_C_CL)
+./spirv/c/%.spv:./opencl/c/%.cl
 	clang -Xclang -finclude-default-header -xcl -cl-std=CL2.0 -fsyntax-only $<
 	clspv -o=$@ $< -O=3
 	clspv-reflection -o $(basename $@).csv $@
+	spirv-dis -o $(basename $@).txt $@
+	spirv-cross $@ --output $(basename $@).json --reflect
 	spirv-cross $@ --output $(basename $@).comp --vulkan-semantics
 	glslangValidator -V -S comp -o $@ $(basename $@).comp
 
