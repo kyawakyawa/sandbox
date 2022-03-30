@@ -1052,13 +1052,13 @@ public:
     // compute shaderは一つのステージのみである
     //
     // まずcomputeシェーダーのステージを指定する
-    // エントリーポイントは gaussian_filter3x3_glayscale
+    // エントリーポイントは gaussian_filter5x5_glayscale
     VkPipelineShaderStageCreateInfo shader_stage_create_info = {};
     shader_stage_create_info.sType =
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shader_stage_create_info.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
     shader_stage_create_info.module = compute_shader_module_;
-    shader_stage_create_info.pName  = "gaussian_filter9x9_glayscale";
+    shader_stage_create_info.pName  = "gaussian_filter5x5_glayscale";
 
     // PipelineLayoutはPipelineがdescriptor setにアクセスすることを可能にする
     // よって先に作ったdescriptor set layoutを指定する

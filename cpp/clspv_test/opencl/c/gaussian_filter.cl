@@ -7,20 +7,20 @@
     int x_id = (int)index_x + (offset_x);                         \
     int y_id = (int)index_y + (offset_y);                         \
     if (IN(x_id, y_id)) {                                         \
-      float v               = (float)src[y_id * w + x_id];        \
+      float v               = ((float)src[y_id * w + x_id]);      \
       const float offset_xf = (float)offset_x;                    \
       const float offset_yf = (float)offset_y;                    \
       v *= norm_factor * inv_sigma *                              \
            exp(-(offset_xf * offset_xf + offset_yf * offset_yf) * \
                half_inv_simga2);                                  \
-      dst[center_idx] += (uchar)v;                                \
+      sum += (uchar)v;                                            \
     }                                                             \
   }
 
 // TODO(anyone): Specify workgroup in host code.
 __attribute__((reqd_work_group_size(WORKGROUP_SIZE, WORKGROUP_SIZE, 1)))
 __kernel void
-gaussian_filter9x9_glayscale(__global uchar *dst, __global const uchar *src,
+gaussian_filter5x5_glayscale(__global uchar *dst, __global const uchar *src,
                              uint w, uint h, float sigma) {
   const uint index_x = get_global_id(0);
   const uint index_y = get_global_id(1);
@@ -38,9 +38,37 @@ gaussian_filter9x9_glayscale(__global uchar *dst, __global const uchar *src,
 
   dst[center_idx] = 0;
 
-  for (int i = -4; i <= 4; ++i) {
-    for (int j = -4; j <= 4; ++j) {
-      ADD(j, i);
-    }
-  }
+  float sum = 0.f;
+
+  ADD(-2, -2);
+  ADD(-1, -2);
+  ADD(0, -2);
+  ADD(1, -2);
+  ADD(2, -2);
+
+  ADD(-2, -1);
+  ADD(-1, -1);
+  ADD(0, -1);
+  ADD(1, -1);
+  ADD(2, -1);
+
+  ADD(-2, 0);
+  ADD(-1, 0);
+  ADD(0, 0);
+  ADD(1, 0);
+  ADD(2, 0);
+
+  ADD(-2, 1);
+  ADD(-1, 1);
+  ADD(0, 1);
+  ADD(1, 1);
+  ADD(2, 1);
+
+  ADD(-2, 2);
+  ADD(-1, 2);
+  ADD(0, 2);
+  ADD(1, 2);
+  ADD(2, 2);
+
+  dst[center_idx] = (uchar)(sum);
 }
