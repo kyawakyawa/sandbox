@@ -10,8 +10,8 @@
 
 #include "lodepng.h"  //Used for png encoding.
 
-const int WIDTH          = 3200;  // Size of rendered mandelbrot set.
-const int HEIGHT         = 2400;  // Size of renderered mandelbrot set.
+// const int WIDTH          = 3200;  // Size of rendered mandelbrot set.
+// const int HEIGHT         = 2400;  // Size of renderered mandelbrot set.
 const int WORKGROUP_SIZE = 32;    // Workgroup size in compute shader.
 
 #ifdef NDEBUG
@@ -157,11 +157,10 @@ public:
   ComputeApplication(const std::string input_filepath,
                      const std::string output_filepath);
   void run() {
-    // Buffer size of the storage buffer that will contain the rendered
-    // mandelbrot set.
-    bufferSize = sizeof(Pixel) * WIDTH * HEIGHT;
 
     loadSrcPng();
+
+    glayscaleSrcImg();
 
     // Initialize vulkan:
     createInstance();
@@ -177,16 +176,16 @@ public:
     printf("Create Pipeline.\n");
     createCommandBuffer();
     printf("Create Command Buffer\n");
-#if 0
+    uploadSrcImgToDevice();
+    printf("Upload source image to GPU\n");
 
     // Finally, run the recorded command buffer.
     runCommandBuffer();
+    printf("Computation is finished\n");
 
-    // The former command rendered a mandelbrot set to a buffer.
-    // Save that buffer as a png on disk.
-    saveRenderedImage();
+    saveFilterdImage();
+    printf("Save filtered image as [%s].\n", output_filepath_.c_str());
 
-#endif
     // Clean up all vulkan resources.
     cleanup();
   }
@@ -199,34 +198,68 @@ public:
       std::runtime_error("Faild to load image. (" + input_filepath_ + ")");
     }
 
+#ifndef NDEBUG
     printf("Input image is loaded. (%s)\n", input_filepath_.c_str());
+#endif
+    input_img_width_  = width;
+    input_img_height_ = height;
   }
 
-#if 0
-  void saveRenderedImage() {
-    void* mappedMemory = NULL;
-    // Map the buffer memory, so that we can read from it on the CPU.
-    vkMapMemory(device, bufferMemory, 0, bufferSize, 0, &mappedMemory);
-    Pixel* pmappedMemory = (Pixel*)mappedMemory;
-
-    // Get the color data from the buffer, and cast it to bytes.
-    // We save the data to a vector.
-    std::vector<unsigned char> image;
-    image.reserve(WIDTH * HEIGHT * 4);
-    for (int i = 0; i < WIDTH * HEIGHT; i += 1) {
-      image.push_back((unsigned char)(255.0f * (pmappedMemory[i].r)));
-      image.push_back((unsigned char)(255.0f * (pmappedMemory[i].g)));
-      image.push_back((unsigned char)(255.0f * (pmappedMemory[i].b)));
-      image.push_back((unsigned char)(255.0f * (pmappedMemory[i].a)));
+  void glayscaleSrcImg(void) {
+    uint32_t ch =
+        input_img_buf_.size() / (input_img_width_ * input_img_height_);
+#ifndef NDEBUG
+    printf("number of channnel: %u\n", ch);
+#endif
+    if (ch == 1) {
+      return;
     }
-    // Done reading, so unmap.
-    vkUnmapMemory(device, bufferMemory);
+    if (ch == 2) {
+      throw std::runtime_error("Image is broken.");
+    }
+    std::vector<unsigned char> tmp(input_img_buf_.begin(),
+                                   input_img_buf_.end());
+    input_img_buf_.resize(input_img_width_ * input_img_height_);
+    for (int y = 0; y < input_img_height_; ++y) {
+      for (int x = 0; x < input_img_width_; ++x) {
+        float vf = 0.f;
+        vf += 0.3f * float(tmp[y * input_img_width_ * ch + x * ch + 0]);
+        vf += 0.59f * float(tmp[y * input_img_width_ * ch + x * ch + 1]);
+        vf += 0.11f * float(tmp[y * input_img_width_ * ch + x * ch + 2]);
+        input_img_buf_[y * input_img_width_ + x] =
+            static_cast<unsigned char>(vf);
+      }
+    }
+  }
+
+  void saveFilterdImage() {
+    void* mapped_memory = nullptr;
+    // Map the buffer memory, so that we can read from it on the CPU.
+    vkMapMemory(device, dst_buffer_memory_, 0, dst_buffer_size_, 0,
+                &mapped_memory);
+
+    decltype(input_img_buf_)::value_type* pmapped_memory =
+        reinterpret_cast<typename decltype(input_img_buf_)::value_type*>(
+            mapped_memory);
+
+    vkUnmapMemory(device, dst_buffer_memory_);
+    printf("Download dst image from GPU\n");
+
+    std::vector<decltype(input_img_buf_)::value_type> output_img_buf(
+        input_img_width_ * input_img_height_ * 4);
+
+    for (int i = 0; i < input_img_width_ * input_img_height_; ++i) {
+      output_img_buf[i * 4 + 0] = pmapped_memory[i];
+      output_img_buf[i * 4 + 1] = pmapped_memory[i];
+      output_img_buf[i * 4 + 2] = pmapped_memory[i];
+      output_img_buf[i * 4 + 3] = 255;
+    }
 
     // Now we save the acquired color data to a .png.
-    unsigned error = lodepng::encode("mandelbrot.png", image, WIDTH, HEIGHT);
+    unsigned error = lodepng::encode(output_filepath_.c_str(), output_img_buf,
+                                     input_img_width_, input_img_height_);
     if (error) printf("encoder error %d: %s", error, lodepng_error_text(error));
   }
-#endif
 
   static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
       VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType,
@@ -1122,11 +1155,25 @@ public:
     If you are already familiar with compute shaders from OpenGL, this should be
     nothing new to you.
     */
-    vkCmdDispatch(commandBuffer, (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE)),
-                  (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
+    vkCmdDispatch(commandBuffer, (uint32_t)ceil(input_img_width_ / float(WORKGROUP_SIZE)),
+                  (uint32_t)ceil(input_img_height_ / float(WORKGROUP_SIZE)), 1);
 
     VK_CHECK_RESULT(
         vkEndCommandBuffer(commandBuffer));  // end recording commands.
+  }
+
+  void uploadSrcImgToDevice(void) {
+    void* mapped_memory = nullptr;
+    vkMapMemory(device, src_buffer_memory_, 0, src_buffer_size_, 0,
+                &mapped_memory);
+    decltype(input_img_buf_)::value_type* pmapped_memory =
+        reinterpret_cast<typename decltype(input_img_buf_)::value_type*>(
+            mapped_memory);
+
+    for (size_t i = 0; i < input_img_buf_.size(); ++i) {
+      pmapped_memory[i] = input_img_buf_[i];
+    }
+    vkUnmapMemory(device, src_buffer_memory_);
   }
 
   void runCommandBuffer() {

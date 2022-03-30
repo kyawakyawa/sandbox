@@ -17,11 +17,13 @@
 // TODO(anyone): Specify workgroup in host code.
 __attribute__((reqd_work_group_size(WORKGROUP_SIZE, WORKGROUP_SIZE, 1)))
 __kernel void
-gaussian_filter3x3_glayscale(__global uchar *dst, __global uchar *src, uint w,
+gaussian_filter3x3_glayscale(__global uchar *dst, __global const uchar *src, uint w,
                              uint h, float sigma) {
   const uint index_x = get_global_id(0);
   const uint index_y = get_global_id(1);
+  dst[index_y * w + index_x] = src[index_y * w + index_x];
 
+#if 0
   __constant const float norm_factor =
       0.39894228040143270286f; // 1 / sqrt(2 * pi)
 
@@ -45,4 +47,5 @@ gaussian_filter3x3_glayscale(__global uchar *dst, __global uchar *src, uint w,
   ADD(-1, 1)
   ADD(0, 1)
   ADD(1, 1)
+#endif
 }
