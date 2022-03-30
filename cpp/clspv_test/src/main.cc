@@ -1,26 +1,3 @@
-/*
-The MIT License (MIT)
-
-Copyright (c) 2017 Eric Arnebäck
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
 
 #include <vulkan/vulkan.h>
 
@@ -213,7 +190,7 @@ public:
 
         /*
         By enabling validation layers, Vulkan will emit warnings if the API
-        is used incorrectly. We shall enable the layer VK_LAYER_LUNARG_standard_validation,
+        is used incorrectly. We shall enable the layer VK_LAYER_KHRONOS_validation,
         which is basically a collection of several useful validation layers.
         */
         if (enableValidationLayers) {
@@ -227,12 +204,12 @@ public:
             vkEnumerateInstanceLayerProperties(&layerCount, layerProperties.data());
 
             /*
-            And then we simply check if VK_LAYER_LUNARG_standard_validation is among the supported layers.
+            And then we simply check if VK_LAYER_KHRONOS_validation is among the supported layers.
             */
             bool foundLayer = false;
             for (VkLayerProperties prop : layerProperties) {
                 
-                if (strcmp("VK_LAYER_LUNARG_standard_validation", prop.layerName) == 0) {
+                if (strcmp("VK_LAYER_KHRONOS_validation", prop.layerName) == 0) {
                     foundLayer = true;
                     break;
                 }
@@ -240,9 +217,9 @@ public:
             }
             
             if (!foundLayer) {
-                throw std::runtime_error("Layer VK_LAYER_LUNARG_standard_validation not supported\n");
+                throw std::runtime_error("Layer VK_LAYER_KHRONOS_validation not supported\n");
             }
-            enabledLayers.push_back("VK_LAYER_LUNARG_standard_validation"); // Alright, we can use this layer.
+            enabledLayers.push_back("VK_LAYER_KHRONOS_validation"); // Alright, we can use this layer.
 
             /*
             We need to enable an extension named VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
@@ -637,9 +614,9 @@ public:
         Create a shader module. A shader module basically just encapsulates some shader code.
         */
         uint32_t filelength;
-        // the code in comp.spv was created by running the command:
+        // the code in mandelbrot.spv was created by running the command:
         // glslangValidator.exe -V shader.comp
-        uint32_t* code = readFile(filelength, "./spirv/c/mandelbrot.spv");
+        uint32_t* code = readFile(filelength, "spirv/c/mandelbrot.spv");
         VkShaderModuleCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         createInfo.pCode = code;
