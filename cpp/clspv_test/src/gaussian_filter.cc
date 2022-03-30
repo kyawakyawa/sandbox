@@ -255,6 +255,9 @@ public:
   }
 
   void saveFilterdImage() {
+    std::vector<decltype(input_img_buf_)::value_type> tmp(input_img_width_ *
+                                                          input_img_height_);
+
     void* mapped_memory = nullptr;
     // Map the buffer memory, so that we can read from it on the CPU.
     vkMapMemory(device, dst_buffer_memory_, 0, dst_buffer_size_, 0,
@@ -263,18 +266,23 @@ public:
     decltype(input_img_buf_)::value_type* pmapped_memory =
         reinterpret_cast<typename decltype(input_img_buf_)::value_type*>(
             mapped_memory);
-    std::vector<decltype(input_img_buf_)::value_type> output_img_buf(
-        input_img_width_ * input_img_height_ * 4);
 
-    for (int i = 0; i < input_img_width_ * input_img_height_; ++i) {
-      output_img_buf[i * 4 + 0] = pmapped_memory[i];
-      output_img_buf[i * 4 + 1] = pmapped_memory[i];
-      output_img_buf[i * 4 + 2] = pmapped_memory[i];
-      output_img_buf[i * 4 + 3] = 255;
-    }
+    memcpy(tmp.data(), pmapped_memory,
+           sizeof(decltype(tmp)::value_type) * tmp.size());
 
     vkUnmapMemory(device, dst_buffer_memory_);
+
     printf("Download dst image from GPU\n");
+
+    std::vector<decltype(input_img_buf_)::value_type> output_img_buf(
+        input_img_width_ * input_img_height_ * 4);
+    for (int i = 0; i < input_img_width_ * input_img_height_; ++i) {
+      decltype(input_img_buf_)::value_type v = tmp[i];
+      output_img_buf[i * 4 + 0]              = v;
+      output_img_buf[i * 4 + 1]              = v;
+      output_img_buf[i * 4 + 2]              = v;
+      output_img_buf[i * 4 + 3]              = 255;
+    }
 
     // Now we save the acquired color data to a .png.
     unsigned error = lodepng::encode(output_filepath_.c_str(), output_img_buf,
@@ -1050,7 +1058,7 @@ public:
         VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shader_stage_create_info.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
     shader_stage_create_info.module = compute_shader_module_;
-    shader_stage_create_info.pName  = "gaussian_filter3x3_glayscale";
+    shader_stage_create_info.pName  = "gaussian_filter9x9_glayscale";
 
     // PipelineLayoutはPipelineがdescriptor setにアクセスすることを可能にする
     // よって先に作ったdescriptor set layoutを指定する
