@@ -84,7 +84,9 @@ private:
   // clang-format off
   const std::vector<const char*> device_extensions_ = {
       VK_KHR_VARIABLE_POINTERS_EXTENSION_NAME,            // Clspvを使う場合に必要
-      VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,     // Clspvを使う場合に必要
+#if !(__APPLE__) // Molten VKでは対応したいないみたい(2022/03/31現在) ValidationLayerでエラーが出るが問題ない？
+       VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,     // Clspvを使う場合に必要
+#endif // 1(__APPLE__)
       VK_KHR_STORAGE_BUFFER_STORAGE_CLASS_EXTENSION_NAME, // Clspvを使う場合に必要
 
       VK_KHR_8BIT_STORAGE_EXTENSION_NAME,  // shader interfaceに8bitの型用いる
@@ -1169,7 +1171,7 @@ public:
     MyPushConstant my_push_constant;
     my_push_constant.w     = input_img_width_;
     my_push_constant.h     = input_img_height_;
-    my_push_constant.sigma = 1.0f;
+    my_push_constant.sigma = 10.0f;
 
     // Push Constantの値をセットするコマンドをBufferに渡す
     vkCmdPushConstants(commandBuffer, pipeline_layout_,
