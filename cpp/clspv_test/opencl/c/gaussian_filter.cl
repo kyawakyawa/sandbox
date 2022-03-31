@@ -13,9 +13,18 @@
       v *= norm_factor * inv_sigma *                              \
            exp(-(offset_xf * offset_xf + offset_yf * offset_yf) * \
                half_inv_simga2);                                  \
-      sum += (uchar)v;                                            \
+      sum += v;                                                   \
     }                                                             \
   }
+
+#define ADD_RAW(offset_y) \
+  ADD(-3, (offset_y))     \
+  ADD(-2, (offset_y))     \
+  ADD(-1, (offset_y))     \
+  ADD(-0, (offset_y))     \
+  ADD(1, (offset_y))      \
+  ADD(2, (offset_y))      \
+  ADD(3, (offset_y))
 
 // TODO(anyone): Specify workgroup in host code.
 __attribute__((reqd_work_group_size(WORKGROUP_SIZE, WORKGROUP_SIZE, 1)))
@@ -40,35 +49,13 @@ gaussian_filter5x5_glayscale(__global uchar *dst, __global const uchar *src,
 
   float sum = 0.f;
 
-  ADD(-2, -2);
-  ADD(-1, -2);
-  ADD(0, -2);
-  ADD(1, -2);
-  ADD(2, -2);
-
-  ADD(-2, -1);
-  ADD(-1, -1);
-  ADD(0, -1);
-  ADD(1, -1);
-  ADD(2, -1);
-
-  ADD(-2, 0);
-  ADD(-1, 0);
-  ADD(0, 0);
-  ADD(1, 0);
-  ADD(2, 0);
-
-  ADD(-2, 1);
-  ADD(-1, 1);
-  ADD(0, 1);
-  ADD(1, 1);
-  ADD(2, 1);
-
-  ADD(-2, 2);
-  ADD(-1, 2);
-  ADD(0, 2);
-  ADD(1, 2);
-  ADD(2, 2);
+  ADD_RAW(-3);
+  ADD_RAW(-2);
+  ADD_RAW(-1);
+  ADD_RAW(0);
+  ADD_RAW(1);
+  ADD_RAW(2);
+  ADD_RAW(3);
 
   dst[center_idx] = (uchar)(sum);
 }
