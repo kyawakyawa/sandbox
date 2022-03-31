@@ -37,7 +37,7 @@ gaussian_filter7x7_glayscale(__global uchar *dst, __global const uchar *src,
   // __constant const float norm_factor =
   //     0.39894228040143270286f;  // 1 / sqrt(2 * pi)
 
-  __constant const float norm_factor = 0.15915494309189534561;  // 1 / 2 * pi
+  __constant const float norm_factor = 0.15915494309189534561f;  // 1 / 2 * pi
 
   if (index_x >= w || index_y >= h) return;
 
