@@ -29,7 +29,7 @@
 // TODO(anyone): Specify workgroup in host code.
 __attribute__((reqd_work_group_size(WORKGROUP_SIZE, WORKGROUP_SIZE, 1)))
 __kernel void
-gaussian_filter5x5_glayscale(__global uchar *dst, __global const uchar *src,
+gaussian_filter7x7_glayscale(__global uchar *dst, __global const uchar *src,
                              uint w, uint h, float sigma) {
   const uint index_x = get_global_id(0);
   const uint index_y = get_global_id(1);
