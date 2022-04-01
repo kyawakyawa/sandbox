@@ -28,7 +28,7 @@ dummy: $(ALL_O)
 	rm $@.tmp $@.tmp.tmp
 
 # ハイフンをつけると(-includeと書くと)エラーを出さない
-include $(ALL_D)
+-include $(ALL_D)
 # makeが実行された最初に以下のことが行われる
 # .././obj/%.d:... が実行される(更新の必要性があれば) -> includeで*.dファイルが読まれる -> .././obj/%.o:... の依存が*.dファイルに従って上書きされる
 
