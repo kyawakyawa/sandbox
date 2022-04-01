@@ -7,6 +7,9 @@ CXXFLAGS := -Wall -Wextra # -Weverything
 CXXFLAGS_RELEASE := -std=c++17 -O3 -DNDEBUG
 CXXFLAGS_DEBUG := -std=c++17 -O0 -g
 
+INCLUDE_DIR := ./inc ./src
+THIRD_PARTY_INCLUDE_DIR := third_party/hoge/include
+
 SRC_ROOT_DIR := ./src
 SRC_DIR := $(SRC_ROOT_DIR) $(SRC_ROOT_DIR)/*
 
@@ -23,20 +26,31 @@ ALL_O_DEBUG := $(addprefix ./obj/$(BUILD_TYPE_DEBUG)/,$(addsuffix .o,$(ALL_C) $(
 
 ALL_H := $(wildcard inc/*.h inc/*/*.h $(SRC_ROOT_DIR)/*.h $(SRC_ROOT_DIR)/*/*.h)
 
+COMMON_ARGS := "CC=$(CC)" "CXX=$(CXX)" \
+							 "ALL_H=$(addprefix ../,$(ALL_H))" \
+							 "INCLUDE_DIR=$(addprefix ../,$(INCLUDE_DIR))" \
+							 "THIRD_PARTY_INCLUDE_DIR=$(addprefix ../,$(THIRD_PARTY_INCLUDE_DIR))"
+
 .PHONY: release debug all clean
 release:
 	@echo $(ALL_C)
 	@echo $(ALL_CC)
 	@echo $(ALL_O_RELEASE)
 	@echo $(ALL_H)
-	cd obj && $(MAKE) "CC=$(CC)" "CCFLAGS=$(CCFLAGS) $(CCFLAGS_RELEASE)" "CXX=$(CXX)" "CXXFLAGS=$(CXXFLAGS) $(CXXFLAGS_RELEASE)" "ALL_O=$(addprefix ../,$(ALL_O_RELEASE))" "ALL_H=$(addprefix ../,$(ALL_H))" "BUILD_TYPE=$(BUILD_TYPE_RELEASE)"
+	cd obj && $(MAKE) $(COMMON_ARGS) \
+		                "CCFLAGS=$(CCFLAGS)  $(CCFLAGS_RELEASE)" "CXXFLAGS=$(CXXFLAGS) $(CXXFLAGS_RELEASE)" \
+										"ALL_O=$(addprefix ../,$(ALL_O_RELEASE))" \
+										"BUILD_TYPE=$(BUILD_TYPE_RELEASE)"
 
 debug:
 	@echo $(ALL_C)
 	@echo $(ALL_CC)
 	@echo $(ALL_O_DEBUG)
 	@echo $(ALL_H)
-	cd obj && $(MAKE) "CC=$(CC)" "CCFLAGS=$(CCFLAGS) $(CCFLAGS_DEBUG)" "CXX=$(CXX)" "CXXFLAGS=$(CXXFLAGS) $(CXXFLAGS_DEBUG)" "ALL_O=$(addprefix ../,$(ALL_O_DEBUG))" "ALL_H=$(addprefix ../,$(ALL_H))" "BUILD_TYPE=$(BUILD_TYPE_DEBUG)"
+	cd obj && $(MAKE) $(COMMON_ARGS) \
+		                "CCFLAGS=$(CCFLAGS)  $(CCFLAGS_DEBUG)" "CXXFLAGS=$(CXXFLAGS) $(CXXFLAGS_DEBUG)" \
+										"ALL_O=$(addprefix ../,$(ALL_O_DEBUG))" \
+										"BUILD_TYPE=$(BUILD_TYPE_DEBUG)"
 
 all: release debug
 
