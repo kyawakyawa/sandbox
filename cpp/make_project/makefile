@@ -10,6 +10,8 @@ CXXFLAGS_DEBUG := -std=c++17 -O0 -g
 INCLUDE_DIR := ./inc ./src
 THIRD_PARTY_INCLUDE_DIR := third_party/hoge/include
 
+MAIN_INCLUDE_DIR := ./inc
+
 SRC_ROOT_DIR := ./src
 SRC_DIR := $(SRC_ROOT_DIR) $(SRC_ROOT_DIR)/*
 
@@ -41,6 +43,8 @@ release:
 		                "CCFLAGS=$(CCFLAGS)  $(CCFLAGS_RELEASE)" "CXXFLAGS=$(CXXFLAGS) $(CXXFLAGS_RELEASE)" \
 										"ALL_O=$(addprefix ../,$(ALL_O_RELEASE))" \
 										"BUILD_TYPE=$(BUILD_TYPE_RELEASE)"
+	$(CXX) $(CXXFLAGS) $(CXXFLAGS_RELEASE) ./main.cc -o obj/$(BUILD_TYPE_RELEASE)/main.o -c $(addprefix -I,MAIN_INCLUDE_DIR)
+	$(CXX) ./obj/$(BUILD_TYPE_RELEASE)/main.o $(ALL_O_RELEASE) -o main-$(BUILD_TYPE_RELEASE)
 
 debug:
 	@echo $(ALL_C)
@@ -51,6 +55,8 @@ debug:
 		                "CCFLAGS=$(CCFLAGS)  $(CCFLAGS_DEBUG)" "CXXFLAGS=$(CXXFLAGS) $(CXXFLAGS_DEBUG)" \
 										"ALL_O=$(addprefix ../,$(ALL_O_DEBUG))" \
 										"BUILD_TYPE=$(BUILD_TYPE_DEBUG)"
+	$(CXX) $(CXXFLAGS) $(CXXFLAGS_DEBUG) ./main.cc -o obj/$(BUILD_TYPE_DEBUG)/main.o -c $(addprefix -I,MAIN_INCLUDE_DIR)
+	$(CXX) ./obj/$(BUILD_TYPE_DEBUG)/main.o $(ALL_O_DEBUG) -o main-$(BUILD_TYPE_DEBUG)
 
 all: release debug
 
