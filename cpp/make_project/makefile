@@ -7,7 +7,7 @@ CXXFLAGS := -Wall -Wextra # -Weverything
 CXXFLAGS_RELEASE := -std=c++17 -O3 -DNDEBUG
 CXXFLAGS_DEBUG := -std=c++17 -O0 -g
 
-LINKER := $(CXX) -fuse-ld=lld
+LINKER := lld
 
 INCLUDE_DIR := ./inc ./src
 THIRD_PARTY_INCLUDE_DIR := third_party/hoge/include
@@ -55,7 +55,7 @@ $(ALL_O_RELEASE): $(ALL_C_CC_H)
 	mkdir -p ./obj/$(BUILD_TYPE_RELEASE)
 	$(CXX) $(CXXFLAGS) $(CXXFLAGS_RELEASE) ./main.cc -o obj/$(BUILD_TYPE_RELEASE)/main.o -c $(addprefix -I,$(MAIN_INCLUDE_DIR))
 ./main-$(BUILD_TYPE_RELEASE): ./obj/$(BUILD_TYPE_RELEASE)/main.o $(ALL_O_RELEASE)
-	$(LINKER) $^ -o $@
+	$(CXX) -fuse-ld=$(LINKER) $^ -o $@
 
 debug: ./main-$(BUILD_TYPE_DEBUG)
 $(ALL_O_DEBUG): $(ALL_C_CC_H)
@@ -72,7 +72,7 @@ $(ALL_O_DEBUG): $(ALL_C_CC_H)
 	mkdir -p ./obj/$(BUILD_TYPE_DEBUG)
 	$(CXX) $(CXXFLAGS) $(CXXFLAGS_DEBUG) ./main.cc -o obj/$(BUILD_TYPE_DEBUG)/main.o -c $(addprefix -I,$(MAIN_INCLUDE_DIR))
 ./main-$(BUILD_TYPE_DEBUG): ./obj/$(BUILD_TYPE_DEBUG)/main.o $(ALL_O_DEBUG)
-	$(LINKER) $^ -o $@
+	$(CXX) -fuse-ld=$(LINKER) $^ -o $@
 
 all: release debug
 
