@@ -10,7 +10,7 @@ CXXFLAGS_DEBUG := -std=c++17 -O0 -g
 LINKER := lld
 
 INCLUDE_DIR := ./inc ./src
-THIRD_PARTY_INCLUDE_DIR := third_party/hoge/include
+THIRD_PARTY_INCLUDE_DIR := ./third_party/VulkanMemoryAllocator/include
 
 MAIN_INCLUDE_DIR := ./inc
 
