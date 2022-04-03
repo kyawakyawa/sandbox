@@ -43,13 +43,13 @@ OUT_SO := hoge$(shell python3-config --extension-suffix)
 OUT_RELEASE_SO := hoge-$(BUILD_TYPE_RELEASE)$(shell python3-config --extension-suffix)
 OUT_DEBUG_SO := hoge-$(BUILD_TYPE_DEBUG)$(shell python3-config --extension-suffix)
 
-.PHONY: release debug create_stub_files clean
+.PHONY: release release_obj debug debug_obj create_stub_files clean
 release: $(OUT_RELEASE_SO)
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi
 	ln -s $(OUT_RELEASE_SO) $(OUT_SO)
 	$(MAKE) create_stub_files
 
-$(ALL_O_RELEASE): $(ALL_C_CC_H)
+release_obj: $(ALL_C_CC_H)
 	@echo $(ALL_C)
 	@echo $(ALL_CC)
 	@echo $(ALL_O_RELEASE)
@@ -59,15 +59,15 @@ $(ALL_O_RELEASE): $(ALL_C_CC_H)
 										"ALL_O=$(addprefix ../,$(ALL_O_RELEASE))" \
 										"BUILD_TYPE=$(BUILD_TYPE_RELEASE)"
 
-$(OUT_RELEASE_SO):$(ALL_O_RELEASE)
-	$(CXX) -fuse-ld=$(LINKER) $^ -shared -o $@
+$(OUT_RELEASE_SO):release_obj
+	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_RELEASE) -shared -o $@
 
 debug: $(OUT_DEBUG_SO)
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi
 	ln -s $(OUT_DEBUG_SO) $(OUT_SO)
 	$(MAKE) create_stub_files
 
-$(ALL_O_DEBUG): $(ALL_C_CC_H)
+debug_obj: $(ALL_C_CC_H)
 	@echo $(ALL_C)
 	@echo $(ALL_CC)
 	@echo $(ALL_O_DEBUG)
@@ -77,8 +77,8 @@ $(ALL_O_DEBUG): $(ALL_C_CC_H)
 										"ALL_O=$(addprefix ../,$(ALL_O_DEBUG))" \
 										"BUILD_TYPE=$(BUILD_TYPE_DEBUG)"
 
-$(OUT_DEBUG_SO):$(ALL_O_DEBUG)
-	$(CXX) -fuse-ld=$(LINKER) $^ -shared -o $@
+$(OUT_DEBUG_SO):debug_obj
+	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_DEBUG) -shared -o $@
 
 create_stub_files:
 	PYTHONPATH=. pybind11-stubgen hoge --no-setup-py --root-module-suffix="" --ignore-invalid=all --output-dir="./typings"

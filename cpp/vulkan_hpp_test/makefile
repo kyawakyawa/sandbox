@@ -39,9 +39,9 @@ COMMON_ARGS := "CC=$(CC)" "CXX=$(CXX)" \
 							 "INCLUDE_DIR=$(addprefix ../,$(INCLUDE_DIR))" \
 							 "THIRD_PARTY_INCLUDE_DIR=$(addprefix ../,$(THIRD_PARTY_INCLUDE_DIR))"
 
-.PHONY: release debug all clean
+.PHONY: release release_obj debug debug_obj all clean
 release: ./main-$(BUILD_TYPE_RELEASE)
-$(ALL_O_RELEASE): $(ALL_C_CC_H)
+release_obj: $(ALL_C_CC_H)
 	@echo $(ALL_C)
 	@echo $(ALL_CC)
 	@echo $(ALL_O_RELEASE)
@@ -54,11 +54,11 @@ $(ALL_O_RELEASE): $(ALL_C_CC_H)
 ./obj/$(BUILD_TYPE_RELEASE)/main.o:./main.cc
 	mkdir -p ./obj/$(BUILD_TYPE_RELEASE)
 	$(CXX) $(CXXFLAGS) $(CXXFLAGS_RELEASE) ./main.cc -o obj/$(BUILD_TYPE_RELEASE)/main.o -c $(addprefix -I,$(MAIN_INCLUDE_DIR))
-./main-$(BUILD_TYPE_RELEASE): ./obj/$(BUILD_TYPE_RELEASE)/main.o $(ALL_O_RELEASE)
-	$(CXX) -fuse-ld=$(LINKER) $^ -o $@ -lvulkan
+./main-$(BUILD_TYPE_RELEASE): ./obj/$(BUILD_TYPE_RELEASE)/main.o release_obj
+	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_RELEASE) $< -o $@ -lvulkan
 
 debug: ./main-$(BUILD_TYPE_DEBUG)
-$(ALL_O_DEBUG): $(ALL_C_CC_H)
+debug_obj: $(ALL_C_CC_H)
 	@echo $(ALL_C)
 	@echo $(ALL_CC)
 	@echo $(ALL_O_DEBUG)
@@ -71,8 +71,8 @@ $(ALL_O_DEBUG): $(ALL_C_CC_H)
 ./obj/$(BUILD_TYPE_DEBUG)/main.o:./main.cc
 	mkdir -p ./obj/$(BUILD_TYPE_DEBUG)
 	$(CXX) $(CXXFLAGS) $(CXXFLAGS_DEBUG) ./main.cc -o obj/$(BUILD_TYPE_DEBUG)/main.o -c $(addprefix -I,$(MAIN_INCLUDE_DIR))
-./main-$(BUILD_TYPE_DEBUG): ./obj/$(BUILD_TYPE_DEBUG)/main.o $(ALL_O_DEBUG)
-	$(CXX) -fuse-ld=$(LINKER) $^ -o $@ -lvulkan
+./main-$(BUILD_TYPE_DEBUG): ./obj/$(BUILD_TYPE_DEBUG)/main.o debug_obj
+	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_DEBUG) $< -o $@ -lvulkan
 
 all: release debug
 
