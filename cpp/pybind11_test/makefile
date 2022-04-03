@@ -43,7 +43,7 @@ OUT_SO := hoge$(shell python3-config --extension-suffix)
 OUT_RELEASE_SO := hoge-$(BUILD_TYPE_RELEASE)$(shell python3-config --extension-suffix)
 OUT_DEBUG_SO := hoge-$(BUILD_TYPE_DEBUG)$(shell python3-config --extension-suffix)
 
-.PHONY: release debug all clean
+.PHONY: release debug create_stub_files clean
 release: $(OUT_RELEASE_SO)
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi
 	ln -s $(OUT_RELEASE_SO) $(OUT_SO)
@@ -77,6 +77,9 @@ $(ALL_O_DEBUG): $(ALL_C_CC_H)
 
 $(OUT_DEBUG_SO):$(ALL_O_DEBUG)
 	$(CXX) -fuse-ld=$(LINKER) $^ -shared -o $@
+
+create_stub_files:
+	PYTHONPATH=. pybind11-stubgen hoge --no-setup-py --root-module-suffix="" --ignore-invalid=all --output-dir="./typings"
 
 clean:
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi

@@ -38,3 +38,8 @@ stubファイルをtypingsディレクトリに作成
 ```bash
 PYTHONPATH=. pybind11-stubgen hoge --no-setup-py --root-module-suffix="" --ignore-invalid=all --output-dir="./typings"
 ```
+
+もしくは
+```bash
+make create_stub_files
+```
