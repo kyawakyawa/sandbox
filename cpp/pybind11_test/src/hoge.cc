@@ -1,6 +1,7 @@
-#include "pybind11/pybind11.h"
+#include "add.h"
 
-int add(int i, int j) { return i + j; }
+// pybind11
+#include "pybind11/pybind11.h"
 
 PYBIND11_MODULE(hoge, m) {
   m.doc() = "hoge";  // optional module docstring
