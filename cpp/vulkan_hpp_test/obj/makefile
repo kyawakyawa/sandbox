@@ -30,8 +30,8 @@ dummy: $(ALL_O)
 .././obj/$(BUILD_TYPE)/%.d: ../% $(ALL_H) # .././obj/$(BUILD_TYPE)/%.d は 対応する.c or .cc ファイルとすべてのヘッダファイルに依存する
 	mkdir -p $(dir $@)
 	if [ "$(suffix $<)" = ".c" ]; then $(CC) $(COMPILE_COMMON) -MM $< -MF $@.tmp; else  $(CXX) $(COMPILE_COMMON) -MM $< -MF $@.tmp; fi 
-# オブジェクトファイルのディレクトリを修正 区切りにスラッシュ/があるので区切りに#を用いる
-	cat $@.tmp | sed "s#^#$(dir $@)#g" >  $@.tmp.tmp
+# オブジェクトファイルのディレクトリを修正.バックスラッシュを消して一行にしてから処理. 区切りにスラッシュ/があるので区切りに#を用いる
+	cat $@.tmp | sed "s/\\\\//g" | tr '\n' ' ' | sed "s#^#$(dir $@)#g" >  $@.tmp.tmp
 # 拡張子を修正する
 	cat $@.tmp.tmp | sed "s/.o:/$(suffix $<).o:/g" >  $@
 	rm $@.tmp $@.tmp.tmp
