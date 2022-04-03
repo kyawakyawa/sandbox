@@ -1,4 +1,10 @@
+#include <memory>
+
 #include "add.h"
+#include "dog.h"
+#include "pet.h"
+#include "polymorphic_dog.h"
+#include "polymorphic_pet.h"
 #include "world.h"
 
 // pybind11
@@ -16,4 +22,49 @@ PYBIND11_MODULE(hoge, m) {
   // variable
   py::object world = py::cast(gWorld);
   m.attr("What")   = world;
+
+  // class
+  py::class_<Pet> pet(m, "Pet");
+  pet.def(py::init<const std::string &>(), "name"_a)
+      .def(py::init<const std::string &, Pet::Kind>())
+      .def("SetName", &Pet::SetName)
+      .def("GetName", &Pet::GetName)
+      .def("__repr__",
+           [](const Pet &a) { return "hoge.Pet named '" + a.GetName() + "'>"; })
+      .def_property("name", &Pet::GetName, &Pet::SetName)
+      .def("Set", static_cast<void (Pet::*)(int)>(&Pet::Set),
+           "Set the pet's age")
+      .def("Set", static_cast<void (Pet::*)(const std::string &)>(&Pet::Set),
+           "Set the pet's name")
+      // For C++14
+      // .def("Set", py::overload_cast<int>(&Pet::Set), "Set the pet's age")
+      // .def("Set", py::overload_cast<const std::string &>(&Pet::Set), "Set the
+      // pet's name");
+      .def_property("type", &Pet::GetType, &Pet::SetType);
+
+  py::enum_<Pet::Kind>(pet, "Kind")
+      .value("Dog", Pet::Kind::Dog)
+      .value("Cat", Pet::Kind::Cat)
+      .export_values();
+
+  py::class_<Pet::Attributes>(pet, "Attributes")
+      .def(py::init<>())
+      .def_readwrite("age", &Pet::Attributes::age);
+
+  // Method 2: pass parent class_ object:
+  py::class_<Dog>(m, "Dog", pet /* <- specify Python parent type */)
+      .def(py::init<const std::string &>(), "name"_a)
+      .def("Bark", &Dog::Bark);
+
+  m.def("pet_store", []() { return std::unique_ptr<Pet>(new Dog("Molly")); });
+
+  // Same binding code
+  py::class_<PolymorphicPet>(m, "PolymorphicPet");
+  py::class_<PolymorphicDog, PolymorphicPet>(m, "PolymorphicDog")
+      .def(py::init<>())
+      .def("Bark", &PolymorphicDog::Bark);
+
+  // Again, return a base pointer to a derived instance
+  m.def("pet_store2",
+        []() { return std::unique_ptr<PolymorphicPet>(new PolymorphicDog); });
 }
