@@ -47,6 +47,7 @@ OUT_DEBUG_SO := hoge-$(BUILD_TYPE_DEBUG)$(shell python3-config --extension-suffi
 release: $(OUT_RELEASE_SO)
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi
 	ln -s $(OUT_RELEASE_SO) $(OUT_SO)
+	$(MAKE) create_stub_files
 
 $(ALL_O_RELEASE): $(ALL_C_CC_H)
 	@echo $(ALL_C)
@@ -64,6 +65,7 @@ $(OUT_RELEASE_SO):$(ALL_O_RELEASE)
 debug: $(OUT_DEBUG_SO)
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi
 	ln -s $(OUT_DEBUG_SO) $(OUT_SO)
+	$(MAKE) create_stub_files
 
 $(ALL_O_DEBUG): $(ALL_C_CC_H)
 	@echo $(ALL_C)

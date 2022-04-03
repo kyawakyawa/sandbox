@@ -4,11 +4,13 @@ import hoge
 import typing
 
 __all__ = [
+    "What",
     "add"
 ]
 
 
-def add(arg0: int, arg1: int) -> int:
+def add(i: int = 1, j: int = 2) -> int:
     """
     A function that adds two numbers
     """
+What = 'World'
