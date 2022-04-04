@@ -1,4 +1,5 @@
 import hoge
+import numpy as np
 
 print(hoge.__doc__)
 
@@ -33,3 +34,22 @@ p3.Bark()  # ok
 p4 = hoge.Pet("Lucy", hoge.Pet.Kind.Cat)
 print(p4.type)
 print(int(p4.type))
+
+
+a = np.zeros([3, 4, 5])
+a = a.astype(np.float32)
+
+hoge.show_shape(a)
+
+print(a)
+
+hoge.fill_two(a)
+
+print(a)
+
+a = np.zeros([3, 4, 5]).astype(np.float64)
+print(a)
+
+hoge.fill_two(a)
+
+print(a)

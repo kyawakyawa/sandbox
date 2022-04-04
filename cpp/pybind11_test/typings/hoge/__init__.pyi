@@ -2,6 +2,8 @@
 from __future__ import annotations
 import hoge
 import typing
+import numpy
+_Shape = typing.Tuple[int, ...]
 
 __all__ = [
     "Dog",
@@ -10,8 +12,10 @@ __all__ = [
     "PolymorphicPet",
     "What",
     "add",
+    "fill_two",
     "pet_store",
-    "pet_store2"
+    "pet_store2",
+    "show_shape"
 ]
 
 
@@ -108,8 +112,12 @@ def add(i: int = 1, j: int = 2) -> int:
     """
     A function that adds two numbers
     """
+def fill_two(a: numpy.ndarray) -> None:
+    pass
 def pet_store() -> Pet:
     pass
 def pet_store2() -> PolymorphicPet:
+    pass
+def show_shape(a: numpy.ndarray) -> None:
     pass
 What = 'World'

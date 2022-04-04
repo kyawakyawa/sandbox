@@ -6,6 +6,7 @@
 #include "polymorphic_dog.h"
 #include "polymorphic_pet.h"
 #include "world.h"
+#include "array.h"
 
 // pybind11
 #include "pybind11/pybind11.h"
@@ -67,4 +68,8 @@ PYBIND11_MODULE(hoge, m) {
   // Again, return a base pointer to a derived instance
   m.def("pet_store2",
         []() { return std::unique_ptr<PolymorphicPet>(new PolymorphicDog); });
+
+  // array
+  m.def("show_shape", &show_shape, "a"_a);
+  m.def("fill_two", &fill_two, "a"_a);
 }
