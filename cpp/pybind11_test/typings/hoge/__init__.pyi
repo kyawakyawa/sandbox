@@ -73,9 +73,8 @@ class Pet():
     @typing.overload
     def Set(self, arg0: str) -> None: ...
     def SetName(self, arg0: str) -> None: ...
-    @staticmethod
     @typing.overload
-    def __init__(*args, **kwargs) -> typing.Any: ...
+    def __init__(self, arg0: str, arg1: Pet.Kind) -> None: ...
     @typing.overload
     def __init__(self, name: str) -> None: ...
     def __repr__(self) -> str: ...
@@ -88,12 +87,12 @@ class Pet():
     def name(self, arg1: str) -> None:
         pass
     @property
-    def type(self) -> Pet::Kind:
+    def type(self) -> Pet.Kind:
         """
-        :type: Pet::Kind
+        :type: Pet.Kind
         """
     @type.setter
-    def type(self, arg1: Pet::Kind) -> None:
+    def type(self, arg1: Pet.Kind) -> None:
         pass
     Cat: hoge.Pet.Kind # value = <Kind.Cat: 1>
     Dog: hoge.Pet.Kind # value = <Kind.Dog: 0>

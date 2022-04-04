@@ -1,12 +1,12 @@
 #include <memory>
 
 #include "add.h"
+#include "array.h"
 #include "dog.h"
 #include "pet.h"
 #include "polymorphic_dog.h"
 #include "polymorphic_pet.h"
 #include "world.h"
-#include "array.h"
 
 // pybind11
 #include "pybind11/pybind11.h"
@@ -26,6 +26,9 @@ PYBIND11_MODULE(hoge, m) {
 
   // class
   py::class_<Pet> pet(m, "Pet");
+  py::enum_<Pet::Kind> kind(pet, "Kind");
+  py::class_<Pet::Attributes> attributes(pet, "Attributes");
+
   pet.def(py::init<const std::string &>(), "name"_a)
       .def(py::init<const std::string &, Pet::Kind>())
       .def("SetName", &Pet::SetName)
@@ -43,14 +46,11 @@ PYBIND11_MODULE(hoge, m) {
       // pet's name");
       .def_property("type", &Pet::GetType, &Pet::SetType);
 
-  py::enum_<Pet::Kind>(pet, "Kind")
-      .value("Dog", Pet::Kind::Dog)
+  kind.value("Dog", Pet::Kind::Dog)
       .value("Cat", Pet::Kind::Cat)
       .export_values();
 
-  py::class_<Pet::Attributes>(pet, "Attributes")
-      .def(py::init<>())
-      .def_readwrite("age", &Pet::Attributes::age);
+  attributes.def(py::init<>()).def_readwrite("age", &Pet::Attributes::age);
 
   // Method 2: pass parent class_ object:
   py::class_<Dog>(m, "Dog", pet /* <- specify Python parent type */)
