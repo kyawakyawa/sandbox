@@ -25,6 +25,9 @@ PYBIND11_MODULE(hoge, m) {
   m.attr("What")   = world;
 
   // class
+  // 先に定義してからdefするとStubの生成が上手くいく
+  // [参考]
+  // https://pybind11.readthedocs.io/en/latest/advanced/misc.html#avoiding-c-types-in-docstrings
   py::class_<Pet> pet(m, "Pet");
   py::enum_<Pet::Kind> kind(pet, "Kind");
   py::class_<Pet::Attributes> attributes(pet, "Attributes");
