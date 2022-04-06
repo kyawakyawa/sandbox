@@ -52,6 +52,16 @@ OUT_SO := hoge$(shell python3-config --extension-suffix)
 OUT_RELEASE_SO := hoge-$(BUILD_TYPE_RELEASE)$(shell python3-config --extension-suffix)
 OUT_DEBUG_SO := hoge-$(BUILD_TYPE_DEBUG)$(shell python3-config --extension-suffix)
 
+ifeq  ($(shell uname),Darwin) # MACのとき
+
+LINK_FLAGS_PYBIND11 := -undefined dynamic_lookup
+
+else
+
+LINK_FLAGS_PYBIND11 := ""
+
+endif
+
 .PHONY: release release_obj debug debug_obj create_stub_files clean
 release: $(OUT_RELEASE_SO)
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi
@@ -72,7 +82,7 @@ release_obj: $(ALL_C_CC_H)
 	$(CXX) $(BINDING_INCLUDE_DIR_ARG) $(CXXFLAGS) -c $< -o $@
 
 $(OUT_RELEASE_SO):$(BINDING_O_RELEASE) release_obj
-	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_RELEASE) $(BINDING_O_RELEASE) -shared -o $@
+	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_RELEASE) $(BINDING_O_RELEASE) $(LINK_FLAGS_PYBIND11) -shared -o $@
 
 debug: $(OUT_DEBUG_SO)
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi
@@ -93,7 +103,7 @@ debug_obj: $(ALL_C_CC_H)
 	$(CXX) $(BINDING_INCLUDE_DIR_ARG) $(CXXFLAGS) -c $< -o $@
 
 $(OUT_DEBUG_SO):$(BINDING_O_DEBUG) debug_obj
-	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_DEBUG) $(BINDING_O_DEBUG) -shared -o $@
+	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_DEBUG) $(BINDING_O_DEBUG) $(LINK_FLAGS_PYBIND11) -shared -o $@
 
 create_stub_files:
 	PYTHONPATH=. pybind11-stubgen hoge --no-setup-py --root-module-suffix="" --ignore-invalid=all --output-dir="./typings"
