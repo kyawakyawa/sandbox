@@ -12,13 +12,14 @@ LINKER := lld
 INCLUDE_DIR := ./inc ./src
 THIRD_PARTY_INCLUDE_DIR := $(patsubst -I%,./%,$(shell python3 -m pybind11 --includes | sed "s/-I//g" | xargs -n1 realpath --relative-to=. | tr '\n' ' '))
 
-MAIN_INCLUDE_DIR := ./inc
+BINDING_INCLUDE_DIR := ./inc
 
 SRC_ROOT_DIR := ./src
 SRC_DIR := $(SRC_ROOT_DIR) $(SRC_ROOT_DIR)/*
 
 ALL_C := $(wildcard $(patsubst %,%/*.c,$(SRC_DIR)))
 ALL_CC := $(wildcard $(patsubst %,%/*.cc,$(SRC_DIR)))
+BINDING_CC := ./hoge.cc
 
 ALL_C_CC := $(ALL_C) $(ALL_CC)
 
@@ -29,6 +30,14 @@ BUILD_TYPES := $(BUILD_TYPE_RELEASE) $(BUILD_TYPE_DEBUG)
 
 ALL_O_RELEASE := $(addprefix ./obj/$(BUILD_TYPE_RELEASE)/,$(addsuffix .o,$(ALL_C_CC)))
 ALL_O_DEBUG := $(addprefix ./obj/$(BUILD_TYPE_DEBUG)/,$(addsuffix .o,$(ALL_C_CC)))
+
+BINDING_O_RELEASE := $(addprefix ./obj/${BUILD_TYPE_RELEASE}/, $(addsuffix .o, $(BINDING_CC)))
+BINDING_O_DEBUG := $(addprefix ./obj/${BUILD_TYPE_DEBUG}/, $(addsuffix .o, $(BINDING_CC)))
+
+BINDING_D_RELEASE := $(patsubst %.o,%.d, $(BINDING_O_RELEASE))
+BINDING_D_DEBUG := $(patsubst %.o,%.d, $(BINDING_O_DEBUG))
+
+BINDING_INCLUDE_DIR_ARG := $(addprefix -I,$(BINDING_INCLUDE_DIR)) $(addprefix -isystem,$(THIRD_PARTY_INCLUDE_DIR))
 
 ALL_H := $(wildcard inc/*.h inc/*/*.h $(SRC_ROOT_DIR)/*.h $(SRC_ROOT_DIR)/*/*.h)
 
@@ -59,8 +68,11 @@ release_obj: $(ALL_C_CC_H)
 										"ALL_O=$(addprefix ../,$(ALL_O_RELEASE))" \
 										"BUILD_TYPE=$(BUILD_TYPE_RELEASE)"
 
-$(OUT_RELEASE_SO):release_obj
-	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_RELEASE) -shared -o $@
+./obj/$(BUILD_TYPE_RELEASE)/%.o:%
+	$(CXX) $(BINDING_INCLUDE_DIR_ARG) $(CXXFLAGS) -c $< -o $@
+
+$(OUT_RELEASE_SO):$(BINDING_O_RELEASE) release_obj
+	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_RELEASE) $(BINDING_O_RELEASE) -shared -o $@
 
 debug: $(OUT_DEBUG_SO)
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi
@@ -77,8 +89,11 @@ debug_obj: $(ALL_C_CC_H)
 										"ALL_O=$(addprefix ../,$(ALL_O_DEBUG))" \
 										"BUILD_TYPE=$(BUILD_TYPE_DEBUG)"
 
-$(OUT_DEBUG_SO):debug_obj
-	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_DEBUG) -shared -o $@
+./obj/$(BUILD_TYPE_DEBUG)/%.o:%
+	$(CXX) $(BINDING_INCLUDE_DIR_ARG) $(CXXFLAGS) -c $< -o $@
+
+$(OUT_DEBUG_SO):$(BINDING_O_DEBUG) debug_obj
+	$(CXX) -fuse-ld=$(LINKER) $(ALL_O_DEBUG) $(BINDING_O_DEBUG) -shared -o $@
 
 create_stub_files:
 	PYTHONPATH=. pybind11-stubgen hoge --no-setup-py --root-module-suffix="" --ignore-invalid=all --output-dir="./typings"
@@ -87,3 +102,24 @@ clean:
 	if [ -e $(OUT_SO) ]; then unlink $(OUT_SO) ; fi
 	$(RM) $(OUT_RELEASE_SO) $(OUT_DEBUG_SO)
 	$(RM) -r $(addprefix ./obj/, $(BUILD_TYPES))
+
+./obj/$(BUILD_TYPE_RELEASE)/%.d:% $(BINDING_INCLUDE_DIR)
+	mkdir -p $(dir $@)
+	$(CXX) $(BINDING_INCLUDE_DIR_ARG) -MM $< -MF $@.tmp
+# オブジェクトファイルのディレクトリを修正.バックスラッシュを消して一行にしてから処理. 区切りにスラッシュ/があるので区切りに#を用いる
+	cat $@.tmp | sed "s/\\\\//g" | tr '\n' ' ' | sed "s#^#$(dir $@)#g" >  $@.tmp.tmp
+# 拡張子を修正する
+	cat $@.tmp.tmp | sed "s/.o:/$(suffix $<).o:/g" >  $@
+	rm $@.tmp $@.tmp.tmp
+
+./obj/$(BUILD_TYPE_DEBUG)/%.d:% $(BINDING_INCLUDE_DIR)
+	mkdir -p $(dir $@)
+	$(CXX) $(BINDING_INCLUDE_DIR_ARG)  -MM $< -MF $@.tmp
+# オブジェクトファイルのディレクトリを修正.バックスラッシュを消して一行にしてから処理. 区切りにスラッシュ/があるので区切りに#を用いる
+	cat $@.tmp | sed "s/\\\\//g" | tr '\n' ' ' | sed "s#^#$(dir $@)#g" >  $@.tmp.tmp
+# 拡張子を修正する
+	cat $@.tmp.tmp | sed "s/.o:/$(suffix $<).o:/g" >  $@
+	rm $@.tmp $@.tmp.tmp
+
+-include $(BINDING_D_RELEASE)
+-include $(BINDING_D_DEBUG)
