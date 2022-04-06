@@ -58,7 +58,7 @@ LINK_FLAGS_PYBIND11 := -undefined dynamic_lookup
 
 else
 
-LINK_FLAGS_PYBIND11 := ""
+LINK_FLAGS_PYBIND11 := 
 
 endif
 
