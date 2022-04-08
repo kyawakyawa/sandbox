@@ -1,0 +1,7 @@
+{
+  "ignore": ["typings/**"],
+  "0strict": ["**"],
+  "executionEnvironments": [
+      {"root": "./"}
+  ]
+}
