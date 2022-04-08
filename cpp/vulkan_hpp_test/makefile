@@ -54,7 +54,7 @@ OUT_DEBUG_SO := vulkan_hpp_test-$(BUILD_TYPE_DEBUG)$(shell python3-config --exte
 
 ifeq  ($(shell uname),Darwin) # MACのとき
 
-LINK_FLAGS_PYBIND11 := -undefined dynamic_lookup
+LINK_FLAGS_PYBIND11 := -undefined dynamic_lookup -lvulkan
 
 else
 
