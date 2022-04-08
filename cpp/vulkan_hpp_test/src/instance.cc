@@ -21,4 +21,6 @@ Instance::Instance() {
 #endif  // NDEBUG
 }
 
+Instance::~Instance() = default;
+
 }  // namespace vulkan_hpp_test
