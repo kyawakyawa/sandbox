@@ -53,9 +53,9 @@ static std::vector<vk::PhysicalDevice> FilterPhysicalDevices(
             physical_device.getProperties().deviceType;
 #ifndef NDEBUG
         if (device_type == vk::PhysicalDeviceType::eDiscreteGpu) {
-          printf("Found discrete GPU.");
+          printf("Found discrete GPU.\n");
         } else if (device_type == vk::PhysicalDeviceType::eIntegratedGpu) {
-          printf("Found integrated GPU.");
+          printf("Found integrated GPU.\n");
         } else {
           printf("Found unknown device.");
         }
