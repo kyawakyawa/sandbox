@@ -8,10 +8,32 @@
 
 namespace vulkan_hpp_test {
 
+static uint32_t GetComputeQueueFamilyIndex(
+    const vk::PhysicalDevice& physical_device) {
+  std::vector<vk::QueueFamilyProperties> queue_families =
+      physical_device.getQueueFamilyProperties<
+          std::allocator<vk::QueueFamilyProperties>>();
+
+  uint32_t ret = 0;
+  for (const vk::QueueFamilyProperties props : queue_families) {
+    if (props.queueCount > 0 &&
+        (props.queueFlags & vk::QueueFlagBits::eCompute)) {
+      // found a queue with compute. We're done!
+      break;
+    }
+  }
+  if (ret == queue_families.size()) {
+    throw std::runtime_error(
+        "could not find a queue family that supports operations");
+  }
+
+  return ret;
+}
+
 static std::vector<vk::PhysicalDevice> FilterPhysicalDevices(
     const std::vector<vk::PhysicalDevice>& physical_devices,
     const uint32_t desired_version,
-    const std::vector<char*> device_extensions) {
+    const std::vector<const char*> device_extensions) {
   std::vector<vk::PhysicalDevice> tmp0;
   std::copy_if(physical_devices.begin(), physical_devices.end(),
                std::back_inserter(tmp0),
@@ -79,19 +101,122 @@ static std::vector<vk::PhysicalDevice> FilterPhysicalDevices(
 
 static std::vector<vk::PhysicalDevice> FindPhysicalDevices(
     const vk::UniqueInstance& instance, const uint32_t desired_version,
-    const std::vector<char*> device_extensions) {
+    const std::vector<const char*> device_extensions) {
   return FilterPhysicalDevices(
       instance->enumeratePhysicalDevices<std::allocator<vk::PhysicalDevice>>(),
       desired_version, device_extensions);
 }
 
-std::vector<vk::UniqueDevice> CreateDevices(
+static std::vector<vk::UniqueDevice> CreateVkDevices(
     const vk::UniqueInstance& instance, const uint32_t desired_version,
-    const std::vector<char*> device_extensions) {
+    const std::vector<const char*> device_extensions,
+    const std::vector<const char*>& enabled_layers) {
   const std::vector<vk::PhysicalDevice> physical_devices =
       FindPhysicalDevices(instance, desired_version, device_extensions);
 
-  return {};
+  std::vector<vk::UniqueDevice> ret;
+  for (const vk::PhysicalDevice& physical_device : physical_devices) {
+    // When creating the device, we also specify what queues it has.
+    //  DeviceQueueCreateInfo(vk::DeviceQueueCreateFlags flags_ = {}, uint32_t
+    //  queueFamilyIndex_ = {}, uint32_t queueCount_ = {}, const float
+    //  *pQueuePriorities_ = {})~
+
+    // vk::DeviceQueueCreate queue_create_info(vk::DeviceQueueCreateFlags:: )
+    //
+    float queue_priorities =
+        1.0;  // we only have one queue, so this is not that imporant.
+    vk::DeviceQueueCreateInfo queue_create_info(
+        /*flags*/ vk::DeviceQueueCreateFlags() /*FIXME*/,
+        /*queueFamilyIndex_*/ GetComputeQueueFamilyIndex(physical_device),
+        /*queueCount*/ 1, /* const floatpQueuePriorities_*/ &queue_priorities);
+
+    // さらに、SPIR-Vで OpCapability Int8 に対応するために
+    // vk::PhysicalDeviceShaderFloat16Int8Features を使う
+    vk::PhysicalDevice8BitStorageFeatures device_8bit_storage_features = {};
+    vk::PhysicalDeviceShaderFloat16Int8Features
+        device_shader_float16_int8_features = {};
+    // vk::PhysicalDevice8BitStorageFeaturesとvk::PhysicalDeviceShaderFloat16Int8Features
+    // を調べるためにvk::PhysicalDeviceFeatures2を作成
+    // vk::PhysicalDeviceFeatures2とvk::PhysicalDeviceFeaturesの違いはpNextが使えるか使えないか
+    // 既存のvk::PhysicalDeviceFeaturesはメンバにある
+    // vk::PhysicalDeviceFeatures2は
+    // pNextにVkPhysicalDevice8BitStorageFeaturesを指定
+    // さらにそのpNextにVkPhysicalDeviceShaderFloat16Int8Featuresを指定
+    vk::PhysicalDeviceFeatures2 device_features2 = {};
+    device_features2.setPNext(&device_8bit_storage_features);
+    device_8bit_storage_features.setPNext(&device_shader_float16_int8_features);
+
+    physical_device.getFeatures2(&device_features2);
+
+#ifndef NDEBUG
+    printf("----- VkPhysicalDevice8BitStorageFeatures -----\n");
+    printf("     - storageBuffer8BitAccess           -> %s.\n",
+           device_8bit_storage_features.storageBuffer8BitAccess ? "OK" : "NO");
+    printf("     - uniformAndStorageBuffer8BitAccess -> %s.\n",
+           device_8bit_storage_features.uniformAndStorageBuffer8BitAccess
+               ? "OK"
+               : "NO");
+    printf("     - storagePushConstant8              -> %s.\n",
+           device_8bit_storage_features.storagePushConstant8 ? "OK" : "NO");
+#endif
+    // 8bitのstrage bufferが利用できない場合、例外を投げる
+    if (!device_8bit_storage_features.storageBuffer8BitAccess) {
+      throw std::runtime_error("Cannot use 8bit strage Buffer\n");
+    }
+#ifndef NDEBUG
+    printf("----- VkPhysicalDeviceShaderFloat16Int8Features -----\n");
+    printf("     - shaderFloat16 -> %s.\n",
+           device_shader_float16_int8_features.shaderFloat16 ? "OK" : "NO");
+    printf("     - shaderInt8    -> %s.\n",
+           device_shader_float16_int8_features.shaderInt8 ? "OK" : "NO");
+#endif
+    // SPIR-Vで OpCapability Int8が利用できない場合、例外を投げる
+    if (!device_shader_float16_int8_features.shaderInt8) {
+      throw std::runtime_error("Cannot use OpCapability Int8\n");
+    }
+
+    // Now we create the logical device. The logical device allows us to
+    // interact with the physical device.
+
+    vk::DeviceCreateInfo device_create_info(
+        /*flags_*/ vk::DeviceCreateFlags() /*FIXME*/,
+        /*queueCreateInfoCount_*/ 1,
+        /*pQueueCreateInfos_*/ &queue_create_info,
+        /*enabledLayerCount_*/ enabled_layers.size(),
+        /*ppEnabledLayerNames_*/ enabled_layers.data(),
+        /*enabledExtensionCount_*/ device_extensions.size(),
+        /*ppEnabledExtensionNames_*/ device_extensions.data(),
+        /*pEnabledFeatures_*/ &(device_features2.features),
+        /*pNext_*/
+        &device_8bit_storage_features);  // vk::PhysicalDevice8BitStorageFeaturesはpNextに指定する
+                                         // 先程、vk::PhysicalDevice8BitStorageFeaturesの
+                                         // pNextにvk::PhysicalDeviceShaderFloat16Int8Featuresも渡したので、
+                                         // そちらもvkCreateDeviceに渡される
+
+    ret.emplace_back(physical_device.createDeviceUnique(device_create_info));
+  }
+
+  return ret;
 }
+
+std::vector<std::shared_ptr<Device>> CreateDevices(
+    const vk::UniqueInstance& instance, const uint32_t desired_version,
+    const std::vector<const char*> device_extensions,
+    const std::vector<const char*>& enabled_layers) {
+  std::vector<vk::UniqueDevice> devices = CreateVkDevices(
+      instance, desired_version, device_extensions, enabled_layers);
+
+  std::vector<std::shared_ptr<Device>> ret;
+  ret.reserve(devices.size());
+
+  for (size_t i = 0; i < devices.size(); ++i) {
+    ret.emplace_back(new Device(std::move(devices[i])));
+  }
+
+  return ret;
+}
+
+Device::Device(vk::UniqueDevice&& device) { device_ = std::move(device); }
+Device::~Device() = default;
 
 }  // namespace vulkan_hpp_test

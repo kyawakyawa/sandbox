@@ -10,7 +10,7 @@ Instance::Instance() {
 
   vk::InstanceCreateInfo create_info({}, &app_info, 0, nullptr, 0, nullptr);
 
-  instance_ = vk::createInstanceUnique(create_info, nullptr);
+  instance = vk::createInstanceUnique(create_info, nullptr);
 
 #ifndef NDEBUG
   printf("--- available instance extensions ---\n");

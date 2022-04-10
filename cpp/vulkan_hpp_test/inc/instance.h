@@ -8,8 +8,8 @@ public:
   Instance();
   ~Instance();
 
+  vk::UniqueInstance instance;
 private:
-  vk::UniqueInstance instance_;
 };
 
 }  // namespace vulkan_hpp_test
