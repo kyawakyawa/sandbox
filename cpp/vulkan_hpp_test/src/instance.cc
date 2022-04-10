@@ -4,11 +4,15 @@
 
 namespace vulkan_hpp_test {
 
-Instance::Instance() {
-  vk::ApplicationInfo app_info("Compute", VK_MAKE_VERSION(1, 0, 0), "No Engine",
-                               VK_MAKE_VERSION(1, 0, 0), VK_API_VERSION_1_1);
+Instance::Instance(
+    const uint32_t desired_version,
+    const std::vector<const char*>& enabled_layers,
+    const std::vector<const char*>& enabled_instance_extentions) {
+  vk::ApplicationInfo app_info("Compute", 0, "No Engine", 0, desired_version);
 
-  vk::InstanceCreateInfo create_info({}, &app_info, 0, nullptr, 0, nullptr);
+  vk::InstanceCreateInfo create_info(
+      {}, &app_info, enabled_layers.size(), enabled_layers.data(),
+      enabled_instance_extentions.size(), enabled_instance_extentions.data());
 
   instance = vk::createInstanceUnique(create_info, nullptr);
 

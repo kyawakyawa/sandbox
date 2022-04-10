@@ -8,9 +8,9 @@ namespace py = pybind11;
 PYBIND11_MODULE(vulkan_hpp_test, m) {
   m.doc() = "vulkan_hpp_test";
 
-  py::class_<vulkan_hpp_test::Instance> instance(m, "Instance");
+  // py::class_<vulkan_hpp_test::Instance> instance(m, "Instance");
 
-  instance.def(py::init<>());
+  // instance.def(py::init<>());
 
   py::class_<vulkan_hpp_test::App> app(m, "App");
 
