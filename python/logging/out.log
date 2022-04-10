@@ -1,0 +1,4 @@
+2022-04-10 13:41:22,553 [INFO] - main.py - main() --- This is a info log.
+2022-04-10 13:41:22,553 [WARNING] - main.py - main() --- This is a warning log.
+2022-04-10 13:41:22,553 [ERROR] - main.py - main() --- This is a error log.
+2022-04-10 13:41:22,553 [CRITICAL] - main.py - main() --- This is a critical log.
