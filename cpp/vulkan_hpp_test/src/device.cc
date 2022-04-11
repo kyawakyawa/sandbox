@@ -53,11 +53,14 @@ static std::vector<vk::PhysicalDevice> FilterPhysicalDevices(
             physical_device.getProperties().deviceType;
 #ifndef NDEBUG
         if (device_type == vk::PhysicalDeviceType::eDiscreteGpu) {
-          printf("Found discrete GPU.\n");
+          printf("Found discrete GPU. [%s]\n",
+                 physical_device.getProperties().deviceName.data());
         } else if (device_type == vk::PhysicalDeviceType::eIntegratedGpu) {
-          printf("Found integrated GPU.\n");
+          printf("Found integrated GPU. [%s]\n",
+                 physical_device.getProperties().deviceName.data());
         } else {
-          printf("Found unknown device.");
+          printf("Found unknown device. [%s]\n",
+                 physical_device.getProperties().deviceName.data());
         }
 #endif
 
@@ -186,12 +189,17 @@ static std::vector<vk::UniqueDevice> CreateVkDevices(
         /*ppEnabledLayerNames_*/ enabled_layers.data(),
         /*enabledExtensionCount_*/ device_extensions.size(),
         /*ppEnabledExtensionNames_*/ device_extensions.data(),
-        /*pEnabledFeatures_*/ &(device_features2.features),
-        /*pNext_*/
+        /*pEnabledFeatures_*/ &(device_features2.features)
+#if 1
+    );
+    device_create_info.setPNext(&device_8bit_storage_features);
+#else
+            ,                            /*pNext_*/
         &device_8bit_storage_features);  // vk::PhysicalDevice8BitStorageFeaturesはpNextに指定する
                                          // 先程、vk::PhysicalDevice8BitStorageFeaturesの
                                          // pNextにvk::PhysicalDeviceShaderFloat16Int8Featuresも渡したので、
                                          // そちらもvkCreateDeviceに渡される
+#endif
 
     ret.emplace_back(physical_device.createDeviceUnique(device_create_info));
   }
