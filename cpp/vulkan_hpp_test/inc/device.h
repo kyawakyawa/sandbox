@@ -10,16 +10,17 @@ class Instance;
 class Device {
 public:
   Device() = delete;
-  Device(vk::UniqueDevice&& device);
+  Device(vk::UniqueDevice&& device_, std::weak_ptr<Instance> instance);
   ~Device();
+
+  vk::UniqueDevice device;
 
 private:
   std::weak_ptr<Instance> instance_;
-  vk::UniqueDevice device_;
 };
 
 std::vector<std::shared_ptr<Device>> CreateDevices(
-    const vk::UniqueInstance& instance, const uint32_t desired_version,
+    std::weak_ptr<Instance> wp_instance, const uint32_t desired_version,
     const std::vector<const char*> device_extensions,
     const std::vector<const char*>& enabled_layers);
 

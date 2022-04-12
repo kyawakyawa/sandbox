@@ -88,7 +88,7 @@ App::App() {
 
   // clang-format on
 
-  devices_ = CreateDevices(instance_->instance, desired_version,
+  devices_ = CreateDevices(instance_, desired_version,
                            device_extensions, enabled_layers_);
 }
 

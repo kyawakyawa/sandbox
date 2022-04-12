@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "instance.h"
 #include "vulkan/vulkan.hpp"
 
 namespace vulkan_hpp_test {
@@ -208,23 +209,30 @@ static std::vector<vk::UniqueDevice> CreateVkDevices(
 }
 
 std::vector<std::shared_ptr<Device>> CreateDevices(
-    const vk::UniqueInstance& instance, const uint32_t desired_version,
+    std::weak_ptr<Instance> wp_instance, const uint32_t desired_version,
     const std::vector<const char*> device_extensions,
     const std::vector<const char*>& enabled_layers) {
+  std::shared_ptr<Instance> instance = wp_instance.lock();
+  if (!instance) {
+    return {};
+  }
   std::vector<vk::UniqueDevice> devices = CreateVkDevices(
-      instance, desired_version, device_extensions, enabled_layers);
+      instance->instance, desired_version, device_extensions, enabled_layers);
 
   std::vector<std::shared_ptr<Device>> ret;
   ret.reserve(devices.size());
 
   for (size_t i = 0; i < devices.size(); ++i) {
-    ret.emplace_back(new Device(std::move(devices[i])));
+    ret.emplace_back(new Device(std::move(devices[i]), instance));
   }
 
   return ret;
 }
 
-Device::Device(vk::UniqueDevice&& device) { device_ = std::move(device); }
+Device::Device(vk::UniqueDevice&& device_, std::weak_ptr<Instance> instance) {
+  device    = std::move(device_);
+  instance_ = instance;
+}
 Device::~Device() = default;
 
 }  // namespace vulkan_hpp_test
