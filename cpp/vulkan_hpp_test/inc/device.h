@@ -10,9 +10,11 @@ class Instance;
 class Device {
 public:
   Device() = delete;
-  Device(vk::UniqueDevice&& device_, std::weak_ptr<Instance> instance);
+  Device(const vk::PhysicalDevice& physical_device, vk::UniqueDevice&& device_,
+         std::weak_ptr<Instance> instance);
   ~Device();
 
+  vk::PhysicalDevice physical_device;
   vk::UniqueDevice device;
 
 private:

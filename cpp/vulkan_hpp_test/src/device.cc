@@ -2,6 +2,7 @@
 
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "instance.h"
@@ -111,14 +112,15 @@ static std::vector<vk::PhysicalDevice> FindPhysicalDevices(
       desired_version, device_extensions);
 }
 
-static std::vector<vk::UniqueDevice> CreateVkDevices(
-    const vk::UniqueInstance& instance, const uint32_t desired_version,
-    const std::vector<const char*> device_extensions,
-    const std::vector<const char*>& enabled_layers) {
+static std::vector<std::pair<vk::PhysicalDevice, vk::UniqueDevice>>
+CreateVkDevices(const vk::UniqueInstance& instance,
+                const uint32_t desired_version,
+                const std::vector<const char*> device_extensions,
+                const std::vector<const char*>& enabled_layers) {
   const std::vector<vk::PhysicalDevice> physical_devices =
       FindPhysicalDevices(instance, desired_version, device_extensions);
 
-  std::vector<vk::UniqueDevice> ret;
+  std::vector<std::pair<vk::PhysicalDevice, vk::UniqueDevice>> ret;
   for (const vk::PhysicalDevice& physical_device : physical_devices) {
     // When creating the device, we also specify what queues it has.
     //  DeviceQueueCreateInfo(vk::DeviceQueueCreateFlags flags_ = {}, uint32_t
@@ -202,7 +204,8 @@ static std::vector<vk::UniqueDevice> CreateVkDevices(
                                          // そちらもvkCreateDeviceに渡される
 #endif
 
-    ret.emplace_back(physical_device.createDeviceUnique(device_create_info));
+    ret.emplace_back(physical_device,
+                     physical_device.createDeviceUnique(device_create_info));
   }
 
   return ret;
@@ -216,22 +219,26 @@ std::vector<std::shared_ptr<Device>> CreateDevices(
   if (!instance) {
     return {};
   }
-  std::vector<vk::UniqueDevice> devices = CreateVkDevices(
-      instance->instance, desired_version, device_extensions, enabled_layers);
+  std::vector<std::pair<vk::PhysicalDevice, vk::UniqueDevice>> devices =
+      CreateVkDevices(instance->instance, desired_version, device_extensions,
+                      enabled_layers);
 
   std::vector<std::shared_ptr<Device>> ret;
   ret.reserve(devices.size());
 
   for (size_t i = 0; i < devices.size(); ++i) {
-    ret.emplace_back(new Device(std::move(devices[i]), instance));
+    ret.emplace_back(
+        new Device(devices[i].first, std::move(devices[i].second), instance));
   }
 
   return ret;
 }
 
-Device::Device(vk::UniqueDevice&& device_, std::weak_ptr<Instance> instance) {
-  device    = std::move(device_);
-  instance_ = instance;
+Device::Device(const vk::PhysicalDevice& physical_device_,
+               vk::UniqueDevice&& device_, std::weak_ptr<Instance> instance) {
+  physical_device = physical_device_;
+  device          = std::move(device_);
+  instance_       = instance;
 }
 Device::~Device() = default;
 
