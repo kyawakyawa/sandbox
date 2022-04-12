@@ -15,6 +15,7 @@ Instance::Instance(
       enabled_instance_extentions.size(), enabled_instance_extentions.data());
 
   instance = vk::createInstanceUnique(create_info, nullptr);
+  version_ = desired_version;
 
 #ifndef NDEBUG
   printf("--- available instance extensions ---\n");
@@ -26,5 +27,7 @@ Instance::Instance(
 }
 
 Instance::~Instance() = default;
+
+uint32_t Instance::GetVersion() { return version_; }
 
 }  // namespace vulkan_hpp_test

@@ -212,7 +212,7 @@ CreateVkDevices(const vk::UniqueInstance& instance,
 }
 
 std::vector<std::shared_ptr<Device>> CreateDevices(
-    std::weak_ptr<Instance> wp_instance, const uint32_t desired_version,
+    std::weak_ptr<Instance> wp_instance,
     const std::vector<const char*> device_extensions,
     const std::vector<const char*>& enabled_layers) {
   std::shared_ptr<Instance> instance = wp_instance.lock();
@@ -220,8 +220,8 @@ std::vector<std::shared_ptr<Device>> CreateDevices(
     return {};
   }
   std::vector<std::pair<vk::PhysicalDevice, vk::UniqueDevice>> devices =
-      CreateVkDevices(instance->instance, desired_version, device_extensions,
-                      enabled_layers);
+      CreateVkDevices(instance->instance, instance->GetVersion(),
+                      device_extensions, enabled_layers);
 
   std::vector<std::shared_ptr<Device>> ret;
   ret.reserve(devices.size());
@@ -239,7 +239,55 @@ Device::Device(const vk::PhysicalDevice& physical_device_,
   physical_device = physical_device_;
   device          = std::move(device_);
   instance_       = instance;
+
+  std::shared_ptr<Instance> sp_instance = instance_.lock();
+
+  if (sp_instance) {
+    VmaVulkanFunctions vulkan_functions    = {};
+    vulkan_functions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+    vulkan_functions.vkGetDeviceProcAddr   = &vkGetDeviceProcAddr;
+
+    VmaAllocatorCreateInfo allocator_create_info = {};
+    allocator_create_info.vulkanApiVersion =
+        sp_instance->GetVersion();  // TODO(any) Is this OK?
+    allocator_create_info.physicalDevice   = physical_device;
+    allocator_create_info.device           = device.get();
+    allocator_create_info.instance         = sp_instance->instance.get();
+    allocator_create_info.pVulkanFunctions = &vulkan_functions;
+
+    vma_allocator_.reset(new VmaAllocator);
+    vmaCreateAllocator(&allocator_create_info, vma_allocator_.get());
+  } else {
+    // TODO(anyone): Handle error
+
+    // TODO(any) delete
+    VkBufferCreateInfo buffer_create_info = {};
+    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_create_info.size  = 512;
+    buffer_create_info.usage =
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;  // buffer is used as a storage
+                                             // buffer.
+    //  buffer_create_info.sharingMode =
+    //      VK_SHARING_MODE_EXCLUSIVE;  // buffer is exclusive to a single queue
+    //                                  // family at a time.
+    //                                  //
+
+    VmaAllocationCreateInfo allocation_create_info = {};
+    allocation_create_info.usage                   = VMA_MEMORY_USAGE_AUTO;
+
+    buffers_[0] = {};
+    vmaCreateBuffer(*vma_allocator_, &buffer_create_info,
+                    &allocation_create_info, &(buffers_[0].first),
+                    &(buffers_[0].second), nullptr);
+  }
 }
-Device::~Device() = default;
+
+Device::~Device() {
+  for (auto& [hadle, buffer_allocation] : buffers_) {
+    vmaDestroyBuffer(*vma_allocator_, buffer_allocation.first,
+                     buffer_allocation.second);
+  }
+  vmaDestroyAllocator(*vma_allocator_);
+}
 
 }  // namespace vulkan_hpp_test

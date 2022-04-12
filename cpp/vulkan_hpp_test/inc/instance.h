@@ -11,9 +11,12 @@ public:
            const std::vector<const char*>& enabled_instance_extentions);
   ~Instance();
 
+  uint32_t GetVersion();
+
   vk::UniqueInstance instance;
 
 private:
+  uint32_t version_;
 };
 
 }  // namespace vulkan_hpp_test
