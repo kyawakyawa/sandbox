@@ -10,6 +10,8 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 
+import wandb
+
 
 class Net(nn.Module):
     def __init__(self):
@@ -33,11 +35,19 @@ class Net(nn.Module):
         return x
 
 
-def train():
+def train(
+    use_wandb: bool,
+    wandb_entity: str,
+    wandb_project: str,
+):
     device: Any = "cpu"
     if torch.cuda.is_available():
         device = "cuda:0"
     print(device)
+
+    learn_rate = 0.001
+    epochs = 30
+    batch_size = 100
 
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))]
@@ -47,16 +57,25 @@ def train():
     )
 
     trainloader = torch.utils.data.DataLoader(
-        trainset, batch_size=100, shuffle=True, num_workers=2
+        trainset, batch_size=batch_size, shuffle=True, num_workers=2
     )
 
     net = Net()
     net = net.to(device)
-
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=learn_rate, momentum=0.9)
 
-    for epoch in range(10):
+    if use_wandb:
+        import wandb
+
+        wandb.init(project=wandb_project, entity=wandb_entity)
+        wandb.config = {
+            "learning_rate": learn_rate,
+            "epochs": epochs,
+            "batch_size": batch_size,
+        }
+
+    for epoch in range(epochs):
         running_loss = 0
         for i, data in enumerate(trainloader, 0):
             # get the inputs; data is a list of [inputs, labels]
@@ -79,9 +98,24 @@ def train():
                 print(f"[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}")
                 running_loss = 0.0
 
+            if use_wandb:
+                import wandb
+
+                wandb.log({"loss": loss})
+                wandb.watch(net)
+
 
 def main():
-    train()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--use_wandb", action="store_true")
+    parser.add_argument("--wandb_entity", type=str, default="user")
+    parser.add_argument("--wandb_project", type=str, default="simple_mnist")
+
+    args = parser.parse_args()
+
+    train(args.use_wandb, args.wandb_entity, args.wandb_project)
 
 
 if __name__ == "__main__":
