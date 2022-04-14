@@ -259,35 +259,62 @@ Device::Device(const vk::PhysicalDevice& physical_device_,
     vmaCreateAllocator(&allocator_create_info, vma_allocator_.get());
   } else {
     // TODO(anyone): Handle error
-
-    // TODO(any) delete
-    VkBufferCreateInfo buffer_create_info = {};
-    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_create_info.size  = 512;
-    buffer_create_info.usage =
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;  // buffer is used as a storage
-                                             // buffer.
-    //  buffer_create_info.sharingMode =
-    //      VK_SHARING_MODE_EXCLUSIVE;  // buffer is exclusive to a single queue
-    //                                  // family at a time.
-    //                                  //
-
-    VmaAllocationCreateInfo allocation_create_info = {};
-    allocation_create_info.usage                   = VMA_MEMORY_USAGE_AUTO;
-
-    buffers_[0] = {};
-    vmaCreateBuffer(*vma_allocator_, &buffer_create_info,
-                    &allocation_create_info, &(buffers_[0].first),
-                    &(buffers_[0].second), nullptr);
   }
 }
 
 Device::~Device() {
-  for (auto& [hadle, buffer_allocation] : buffers_) {
-    vmaDestroyBuffer(*vma_allocator_, buffer_allocation.first,
-                     buffer_allocation.second);
+  for (auto& [handle, buffer_allocation] : buffers_) {
+    std::shared_ptr<Buffer> sp_buffer = buffer_allocation.first.lock();
+    // TODO(any) :Check nullptr and handle error
+    auto [ret_handle, vk_buffer] = sp_buffer->ReturnVkBuffer();
+    assert(handle == ret_handle);
+    if (vk_buffer.get() != nullptr) {
+#ifndef NDEBUG
+    printf("Release Buffer(handle: %u)\n", handle);
+#endif  // NDEBUG
+      vmaDestroyBuffer(*vma_allocator_, *vk_buffer, buffer_allocation.second);
+    }
   }
+  buffers_.clear();
   vmaDestroyAllocator(*vma_allocator_);
+}
+
+/*handle, VkBuffer*/ std::pair<uint32_t, std::unique_ptr<VkBuffer>>
+Device::CreateVkBuffer(const std::weak_ptr<Buffer> buffer,
+                       const size_t size_byte) {
+  VkBufferCreateInfo buffer_create_info = {};
+  buffer_create_info.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  buffer_create_info.size               = size_byte;
+  buffer_create_info.usage =
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;  // buffer is used as a storage
+                                           // buffer.
+  VmaAllocationCreateInfo allocation_create_info = {};
+  allocation_create_info.usage                   = VMA_MEMORY_USAGE_AUTO;
+
+  std::unique_ptr<VkBuffer> vk_buffer(new VkBuffer);
+
+  uint32_t handle        = buffer_conter_++;
+  buffers_[handle]       = {};
+  buffers_[handle].first = buffer;
+  vmaCreateBuffer(*vma_allocator_, &buffer_create_info, &allocation_create_info,
+                  vk_buffer.get(), &(buffers_[handle].second), nullptr);
+
+  return {handle, std::move(vk_buffer)};
+}
+
+void Device::ReturnendBuffer(const uint32_t handle,
+                             std::unique_ptr<VkBuffer> vk_buffer) {
+  // TODO (any) Check handle and handle error
+  auto [wp_buffer, allocation] = buffers_.at(handle);
+
+  if (vk_buffer.get() != nullptr) {
+#ifndef NDEBUG
+    printf("Release Buffer(handle: %u)\n", handle);
+#endif  // NDEBUG
+    vmaDestroyBuffer(*vma_allocator_, *vk_buffer, allocation);
+  }
+
+  buffers_.erase(handle);
 }
 
 }  // namespace vulkan_hpp_test

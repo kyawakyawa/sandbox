@@ -95,4 +95,11 @@ App::~App() {}
 
 uint32_t App::GetNumDevices() { return devices_.size(); }
 
+std::shared_ptr<Buffer> App::CreateBuffer(const uint32_t device_id,
+                                          const size_t size_byte) {
+  // TODO (any) Check device_id and handle error
+  std::shared_ptr<Buffer> ret(new Buffer());
+  ret->Allocate(devices_.at(device_id), size_byte);
+  return ret;
+}
 }  // namespace vulkan_hpp_test

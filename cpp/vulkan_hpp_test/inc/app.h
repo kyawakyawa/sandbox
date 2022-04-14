@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include "buffer.h"
 #include "device.h"
 #include "instance.h"
 
@@ -14,6 +15,9 @@ public:
   ~App();
 
   uint32_t GetNumDevices();
+
+  std::shared_ptr<Buffer> CreateBuffer(const uint32_t device_id,
+                                       const size_t size_byte);
 
 private:
   std::shared_ptr<Instance> instance_;
