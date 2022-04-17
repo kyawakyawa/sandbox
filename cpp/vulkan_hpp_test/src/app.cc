@@ -99,7 +99,23 @@ std::shared_ptr<Buffer> App::CreateBuffer(const uint32_t device_id,
                                           const size_t size_byte) {
   // TODO (any) Check device_id and handle error
   std::shared_ptr<Buffer> ret(new Buffer());
-  ret->Allocate(devices_.at(device_id), size_byte);
+  std::vector<std::weak_ptr<Device>> wp_devices(devices_.begin(),
+                                                devices_.end());
+  ret->Allocate(device_id, wp_devices, size_byte);
   return ret;
 }
+
+std::shared_ptr<CpuBuffer> App::CreateCpuBuffer(const size_t size_byte) {
+  std::shared_ptr<CpuBuffer> ret(new CpuBuffer());
+  std::vector<std::weak_ptr<Device>> wp_devices(devices_.begin(),
+                                                devices_.end());
+  ret->Allocate(wp_devices, size_byte);
+  return ret;
+}
+
+std::shared_ptr<Device> App::FetchDevice(const uint32_t device_id) {
+  // TODO (any) Check device_id and handle error
+  return devices_.at(device_id);
+}
+
 }  // namespace vulkan_hpp_test

@@ -270,7 +270,7 @@ Device::~Device() {
     assert(handle == ret_handle);
     if (vk_buffer.get() != nullptr) {
 #ifndef NDEBUG
-    printf("Release Buffer(handle: %u)\n", handle);
+      printf("Release Buffer(handle: %u)\n", handle);
 #endif  // NDEBUG
       vmaDestroyBuffer(*vma_allocator_, *vk_buffer, buffer_allocation.second);
     }
@@ -290,7 +290,7 @@ Device::CreateVkBuffer(const std::weak_ptr<Buffer> buffer,
                                            // buffer.
   VmaAllocationCreateInfo allocation_create_info = {};
   allocation_create_info.usage                   = VMA_MEMORY_USAGE_AUTO;
-
+  allocation_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
   std::unique_ptr<VkBuffer> vk_buffer(new VkBuffer);
 
   uint32_t handle        = buffer_conter_++;
@@ -317,4 +317,31 @@ void Device::ReturnendBuffer(const uint32_t handle,
   buffers_.erase(handle);
 }
 
+bool Device::FromCpuMemory(const uint32_t handle, const uint8_t* src,
+                           size_t size_byte) {
+  // TODO (any) Check handle and handle error
+  auto [wp_buffer, allocation] = buffers_.at(handle);
+
+  void* mapped_data;
+  vmaMapMemory(*vma_allocator_, allocation, &mapped_data);
+  memcpy(mapped_data, reinterpret_cast<const void*>(src), size_byte);
+  vmaUnmapMemory(*vma_allocator_, allocation);
+
+  return true;
+}
+
+std::unique_ptr<uint8_t[]> Device::ToCpuMemory(const uint32_t handle,
+                                               const size_t size_byte) {
+  // TODO (any) Check handle and handle error
+  auto [wp_buffer, allocation] = buffers_.at(handle);
+
+  std::unique_ptr<uint8_t[]> ret(new uint8_t[size_byte]);
+
+  void* mapped_data;
+  vmaMapMemory(*vma_allocator_, allocation, &mapped_data);
+  memcpy(reinterpret_cast<void*>(ret.get()), mapped_data, size_byte);
+  vmaUnmapMemory(*vma_allocator_, allocation);
+
+  return ret;
+}
 }  // namespace vulkan_hpp_test

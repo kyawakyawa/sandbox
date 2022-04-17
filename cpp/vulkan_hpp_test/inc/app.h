@@ -19,6 +19,9 @@ public:
   std::shared_ptr<Buffer> CreateBuffer(const uint32_t device_id,
                                        const size_t size_byte);
 
+  std::shared_ptr<CpuBuffer> CreateCpuBuffer(const size_t size_byte);
+  std::shared_ptr<Device> FetchDevice(const uint32_t device_id);
+
 private:
   std::shared_ptr<Instance> instance_;
   std::vector<std::shared_ptr<Device>> devices_;

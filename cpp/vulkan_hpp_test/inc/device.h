@@ -28,13 +28,17 @@ public:
   /*handle, VkBuffer*/ std::pair<uint32_t, std::unique_ptr<VkBuffer>>
   CreateVkBuffer(const std::weak_ptr<Buffer> buffer, const size_t size_byte);
 
-  void ReturnendBuffer(const uint32_t handle, std::unique_ptr<VkBuffer> vk_buffer);
+  void ReturnendBuffer(const uint32_t handle,
+                       std::unique_ptr<VkBuffer> vk_buffer);
+
+  bool FromCpuMemory(const uint32_t handle, const uint8_t* src,
+                     size_t size_byte);
+  std::unique_ptr<uint8_t[]> ToCpuMemory(const uint32_t handle, const size_t size_byte);
 
   vk::PhysicalDevice physical_device;
   vk::UniqueDevice device;
 
 private:
-
   std::weak_ptr<Instance> instance_;
   std::unique_ptr<VmaAllocator> vma_allocator_;
   std::unordered_map<uint32_t, std::pair<std::weak_ptr<Buffer>, VmaAllocation>>
