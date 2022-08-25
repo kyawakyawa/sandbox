@@ -6,10 +6,10 @@ CXX     := clang++
 CXXFLAGS := -Wall -Wextra # -Weverything
 CXXFLAGS_RELEASE := -std=c++17 -O3 -DNDEBUG
 CXXFLAGS_DEBUG := -std=c++17 -O0 -g
-CUDAC     := clang++
-CUDACFLAGS := -Wall -Wextra # -Weverything
-CUDACFLAGS_RELEASE := -O3 -DNDEBUG -xcuda -std=c++14 --cuda-gpu-arch=sm_50 -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ -DTORCH_API_INCLUDE_EXTENSION_H -fsyntax-only -nocudalib #FIXME
-CUDACFLAGS_DEBUG := -O0 -g -xcuda -std=cuda --cuda-gpu-arch=sm_50 -nocudalib #FIXME
+CUDAC     := clang++-15
+CUDACFLAGS := -Wall -Wextra -xcuda -std=c++14 --cuda-gpu-arch=sm_61 -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ -DTORCH_API_INCLUDE_EXTENSION_H
+CUDACFLAGS_RELEASE := -O3 -DNDEBUG 
+CUDACFLAGS_DEBUG := -O0 -g
 
 LINKER := lld
 
