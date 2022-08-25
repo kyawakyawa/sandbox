@@ -1,0 +1,73 @@
+# 指定すべき変数
+# CC
+# CCFLAGS  
+# CXX
+# CXXFLAGS  
+#
+# INCLUDE_DIR
+# THIRD_PARTY_INCLUDE_DIR
+#
+# ALL_O
+# ALL_H
+#
+# BUILD_TYPE
+
+ALL_D := $(patsubst %.o,%.d,$(ALL_O))
+INCLUDE_DIR_ARG := $(addprefix -I,$(INCLUDE_DIR))
+THIRD_PARTY_INCLUDE_DIR_ARG := $(addprefix -isystem,$(THIRD_PARTY_INCLUDE_DIR))
+
+COMPILE_COMMON := $(INCLUDE_DIR_ARG) $(THIRD_PARTY_INCLUDE_DIR_ARG)
+
+.PHONY: dummy
+dummy: $(ALL_O)
+
+.././obj/$(BUILD_TYPE)/%.cc.o: ../%.cc
+	mkdir -p $(dir $@)
+	@echo TARGET: $@
+	@echo DEPS  : $^
+	$(CXX) $(COMPILE_COMMON) $(CXXFLAGS) -c $< -o $@
+
+.././obj/$(BUILD_TYPE)/%.cu.o: ../%.cu
+	mkdir -p $(dir $@)
+	@echo TARGET: $@
+	@echo DEPS  : $^
+	$(CUDAC) $(COMPILE_COMMON) $(CUDACFLAGS) -c $< -o $@
+
+.././obj/$(BUILD_TYPE)/%.c.o: ../%.c
+	mkdir -p $(dir $@)
+	@echo TARGET: $@
+	@echo DEPS  : $^
+	$(CC) $(COMPILE_COMMON) $(CCFLAGS) -c $< -o $@
+
+.././obj/$(BUILD_TYPE)/%.cc.d: ../%.cc $(ALL_H) # .././obj/$(BUILD_TYPE)/%.cc.d は 対応する.cc ファイルとすべてのヘッダファイルに依存する
+	mkdir -p $(dir $@)
+	$(CXX) $(COMPILE_COMMON) -MM $< -MF $@.tmp
+# オブジェクトファイルのディレクトリを修正.バックスラッシュを消して一行にしてから処理. 区切りにスラッシュ/があるので区切りに#を用いる
+	cat $@.tmp | sed "s/\\\\//g" | tr '\n' ' ' | sed "s#^#$(dir $@)#g" >  $@.tmp.tmp
+# 拡張子を修正する
+	cat $@.tmp.tmp | sed "s/.o:/$(suffix $<).o:/g" >  $@
+	rm $@.tmp $@.tmp.tmp
+
+.././obj/$(BUILD_TYPE)/%.cu.d: ../%.cu $(ALL_H) # .././obj/$(BUILD_TYPE)/%.cu.d は 対応する.cu ファイルとすべてのヘッダファイルに依存する
+	mkdir -p $(dir $@)
+	$(CUDAC) $(COMPILE_COMMON) $(CUDACFLAGS) -MM $< -MF $@.tmp
+# オブジェクトファイルのディレクトリを修正.バックスラッシュを消して一行にしてから処理. 区切りにスラッシュ/があるので区切りに#を用いる
+	cat $@.tmp | sed "s/\\\\//g" | tr '\n' ' ' | sed "s#^#$(dir $@)#g" >  $@.tmp.tmp
+# 拡張子を修正する
+	cat $@.tmp.tmp | sed "s/.o:/$(suffix $<).o:/g" >  $@
+	rm $@.tmp $@.tmp.tmp
+
+.././obj/$(BUILD_TYPE)/%.c.d: ../%.c $(ALL_H) # .././obj/$(BUILD_TYPE)/%.c.d は 対応する.c ファイルとすべてのヘッダファイルに依存する
+	mkdir -p $(dir $@)
+	$(CC) $(COMPILE_COMMON) -MM $< -MF $@.tmp
+# オブジェクトファイルのディレクトリを修正.バックスラッシュを消して一行にしてから処理. 区切りにスラッシュ/があるので区切りに#を用いる
+	cat $@.tmp | sed "s/\\\\//g" | tr '\n' ' ' | sed "s#^#$(dir $@)#g" >  $@.tmp.tmp
+# 拡張子を修正する
+	cat $@.tmp.tmp | sed "s/.o:/$(suffix $<).o:/g" >  $@
+	rm $@.tmp $@.tmp.tmp
+
+# ハイフンをつけると(-includeと書くと)エラーを出さない
+-include $(ALL_D)
+# makeが実行された最初に以下のことが行われる
+# .././obj/$(BUILD_TYPE)/%.[c,cc].d:... が実行される(更新の必要性があれば) -> includeで*.dファイルが読まれる -> .././obj/$(BUILD_TYPE)/%.o:... の依存が*.dファイルに従って上書きされる
+
