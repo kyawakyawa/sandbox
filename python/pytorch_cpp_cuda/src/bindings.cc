@@ -59,6 +59,10 @@ std::vector<torch::Tensor> lltm_backward(
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("forward", &lltm_forward, "LLTM forward (CUDA)");
-  m.def("backward", &lltm_backward, "LLTM backward (CUDA)");
+  using namespace pybind11::literals;
+  m.def("forward", &lltm_forward, "input"_a, "weights"_a, "bias"_a, "old_h"_a,
+        "old_cell"_a, "LLTM forward (CUDA)");
+  m.def("backward", &lltm_backward, "grad_h"_a, "grad_cell"_a, "new_cell"_a,
+        "input_gate"_a, "output_gate"_a, "candidate_cell"_a, "X"_a,
+        "gate_weights"_a, "weights"_a, "LLTM backward (CUDA)");
 }

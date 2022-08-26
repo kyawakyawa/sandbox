@@ -117,7 +117,7 @@ $(OUT_DEBUG_SO): debug_obj
 all: release debug
 
 create_stub_files:
-	LD_LIBRARY_PATH=$(TORCH_LIB_PATH):$(PYTHON_LIB_PATH) PYTHONPATH=. pybind11-stubgen $(MODULE_NAME) --no-setup-py --root-module-suffix="" --ignore-invalid=all --output-dir="./typings"
+	LD_LIBRARY_PATH=$(TORCH_LIB_PATH):$(PYTHON_LIB_PATH) PYTHONPATH=. pybind11-stubgen $(MODULE_NAME) --no-setup-py --root-module-suffix="" --ignore-invalid=all --output-dir="./typings" --skip-signature-downgrade
 
 clean:
 	$(RM) -r $(addprefix ./obj/, $(BUILD_TYPES))
