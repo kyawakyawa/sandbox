@@ -1,0 +1,18 @@
+name: optuna_test
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.10.6
+  - torchaudio
+  - torchvision
+  - pytorch=1.12.1
+  - scipy
+  - numpy
+  - opencv
+  - pillow=8.4.0
+  - tqdm
+  - cudatoolkit=11.6
+  - matplotlib
+  - optuna
+  - pip=22.2.2
