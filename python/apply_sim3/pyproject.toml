@@ -6,5 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "debugpy>=1.8.6",
+    "pypose>=0.6.8",
     "rerun-sdk>=0.18.2",
 ]
