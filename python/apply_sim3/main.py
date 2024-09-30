@@ -17,8 +17,8 @@ def tomat44(scale: float, rot: np.ndarray, trans: np.ndarray):
     """
     ret = np.eye(4, dtype=rot.dtype)
 
-    ret[:, :3, :3] = s * rot
-    ret[:, :3, 3] = trans
+    ret[:3, :3] = scale * rot
+    ret[:3, 3] = trans
 
     return ret
 
@@ -49,6 +49,7 @@ def draw(cam_rot: np.ndarray, cam_cen_world: np.ndarray, points: np.ndarray):
                 translation=txyz,
                 rotation=rr.Quaternion(xyzw=qxyzw),
                 from_parent=True,
+                axis_length=0.1,
             ),
         )
         rr.log(
@@ -69,6 +70,49 @@ def draw(cam_rot: np.ndarray, cam_cen_world: np.ndarray, points: np.ndarray):
         "points",
         rr.Points3D(points, colors=point_colors),
     )
+
+
+def apply_sim3(
+    cam_rot: np.ndarray,
+    cam_cen_world: np.ndarray,
+    scale_sim3: float,
+    rot_sim3: np.ndarray,
+    trans_sim3: np.ndarray,
+):
+
+    n = cam_rot.shape[0]
+
+    sim3_44 = tomat44(scale_sim3, rot_sim3, trans_sim3)
+
+    ret_cam_rot = np.zeros_like(cam_rot)
+    ret_cam_cen_world = np.zeros_like(cam_cen_world)
+
+    for i in range(n):
+        _cam_rot = cam_rot[i]
+        _cam_cen_world = cam_cen_world[i]
+
+        local2world = tomat44(1.0, _cam_rot, _cam_cen_world)
+
+        fixed = sim3_44 @ local2world
+        # fix scale
+        fixed[:3, :3] = (
+            fixed[:3, :3] / scale_sim3
+        )  # np.linalg.det(fixed[:3, :3]) ** (1 / 3)
+
+        ret_cam_rot[i, :] = fixed[:3, :3]
+        ret_cam_cen_world[i, :] = fixed[:3, 3]
+    return ret_cam_rot, ret_cam_cen_world
+
+
+# to_world_to_local
+def pose_inverse(cam_rot: np.ndarray, cam_cen_world: np.ndarray):
+    n = cam_rot.shape[0]
+    # rotation of world to local
+    rot_l2w = cam_rot.transpose(0, 2, 1)
+    # translation of world to local
+    trans_l2w = (-rot_l2w @ cam_cen_world[:, :, None]).squeeze(axis=-1)
+
+    return rot_l2w, trans_l2w
 
 
 def main():
@@ -100,6 +144,24 @@ def main():
 
     rr.set_time_seconds("stable_time", 2)
     draw(cam_b_rot, cam_b_cen_world, points_b)
+
+    # apply sim3
+    fixed_cam_rot, fixed_cam_cen = apply_sim3(
+        cam_a_rot, cam_a_cen_world, scale, rot, trans
+    )
+
+    rr.set_time_seconds("stable_time", 3)
+    draw(fixed_cam_rot, fixed_cam_cen, points_b)
+
+    # local to world
+    fixed_cam_rot_l2w, fixed_cam_cen_l2w = pose_inverse(cam_a_rot, cam_a_cen_world)
+    # ↓ これだとsim3を逆変換で考えないといけない
+    # fixed_cam_rot_l2w, fixed_cam_cen_l2w = apply_sim3(
+    #     *pose_inverse(cam_a_rot, cam_a_cen_world), scale, rot, trans
+    # )
+
+    rr.set_time_seconds("stable_time", 4)
+    draw(*pose_inverse(fixed_cam_rot_l2w, fixed_cam_cen_l2w), points_b)
 
     rr.script_teardown(args)
 
