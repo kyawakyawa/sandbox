@@ -153,12 +153,10 @@ def main():
     rr.set_time_seconds("stable_time", 3)
     draw(fixed_cam_rot, fixed_cam_cen, points_b)
 
-    # local to world
-    fixed_cam_rot_l2w, fixed_cam_cen_l2w = pose_inverse(cam_a_rot, cam_a_cen_world)
-    # ↓ これだとsim3を逆変換で考えないといけない
-    # fixed_cam_rot_l2w, fixed_cam_cen_l2w = apply_sim3(
-    #     *pose_inverse(cam_a_rot, cam_a_cen_world), scale, rot, trans
-    # )
+    # Sim3を逆変換で考えないといけない
+    fixed_cam_rot_l2w, fixed_cam_cen_l2w = apply_sim3(
+        *pose_inverse(cam_a_rot, cam_a_cen_world), scale, rot, trans
+    )
 
     rr.set_time_seconds("stable_time", 4)
     draw(*pose_inverse(fixed_cam_rot_l2w, fixed_cam_cen_l2w), points_b)
