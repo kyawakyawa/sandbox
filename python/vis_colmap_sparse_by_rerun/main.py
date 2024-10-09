@@ -26,6 +26,7 @@ def visualize_all_frame(images: ImageDict):
                 translation=txyz,
                 rotation=rr.Quaternion(xyzw=qxyzw),
                 from_parent=True,
+                axis_length=0.1,
             ),
         )
         rr.log("camera", rr.ViewCoordinates.RDF, static=True)
@@ -57,6 +58,7 @@ def visualize_each_frame(images: ImageDict, image_dir: str):
                 translation=txyz,
                 rotation=rr.Quaternion(xyzw=qxyzw),
                 from_parent=True,
+                axis_length=0.1,
             ),
         )
         rr.log("camera", rr.ViewCoordinates.RDF, static=True)
