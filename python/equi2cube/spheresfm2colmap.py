@@ -20,7 +20,7 @@ FTYPE = torch.float32
 DIRECTION_NAMES = ["front", "right", "back", "left", "up", "down"]
 
 
-def create_grid(coord2camera: torch.Tensor, tile_w: int, tile_h: int):
+def create_grid_old(coord2camera: torch.Tensor, tile_w: int, tile_h: int):
     coord_x, coord_y = torch.meshgrid(
         torch.arange(tile_w).to(FTYPE).to(DEVICE),
         torch.arange(tile_h).to(FTYPE).to(DEVICE),
@@ -49,6 +49,42 @@ def create_grid(coord2camera: torch.Tensor, tile_w: int, tile_h: int):
     return grid
 
 
+def create_grid(coord2camera: torch.Tensor, tile_w: int, tile_h: int):
+    coord_x, coord_y = torch.meshgrid(
+        torch.arange(tile_w).to(FTYPE).to(DEVICE),
+        torch.arange(tile_h).to(FTYPE).to(DEVICE),
+        indexing="xy",
+    )
+
+    coord = torch.stack(
+        [coord_x, coord_y, torch.ones_like(coord_x), torch.ones_like(coord_x)],
+        dim=-1,
+    )
+    point = (coord2camera[None, None, :, :] @ coord[:, :, :, None]).squeeze(-1)
+    point = point[..., :3] / point[..., 3:]
+    point = point / torch.norm(point, p=2, dim=-1, keepdim=True)
+
+    # thetaは[0, pi]
+    theta = torch.acos(point[..., 1])
+    phi = torch.atan2(point[..., 2], point[..., 0])
+
+    # phiを [-pi,pi] から [-pi/2,3pi/2]に変換する
+    phi = torch.where(phi < -torch.pi / 2, phi + 2 * torch.pi, phi)
+
+    # grid_sampleでの座標を(x,y)とする。
+    # phiが3*pi/2から-pi/2に動くときxは-1から1に線形に動く
+    # thetaがpiから0に動くときyは-1から1に線形に動く
+
+    x = 0.5 - phi / torch.pi
+    y = 1 - 2 * theta / torch.pi
+
+    x = torch.clamp(x, -1.0, 1.0)
+    y = torch.clamp(y, -1.0, 1.0)
+
+    grid = torch.stack([x, y], dim=-1)
+
+    return grid
+
 def to_cube(args: argparse.Namespace, image_path: str):
     tile_w = args.size
     tile_h = args.size
@@ -71,7 +107,7 @@ def to_cube(args: argparse.Namespace, image_path: str):
     grids = torch.zeros((6, tile_h, tile_w, 2), dtype=FTYPE, device=DEVICE)
     deg90 = math.pi / 2
     additional_extrinsics = (
-        torch.eye(4).to(FTYPE).to(DEVICE)[None, :, :].expand(6, -1, -1)
+        torch.eye(4).to(FTYPE).to(DEVICE)[None, :, :].repeat(6, 1, 1)
     )
 
     # front
@@ -197,7 +233,7 @@ def write_colmap_sparse_txt(
             assert (fx - fy) < 1e-6
             f.write(f"{camera_id + 1} ")
             f.write("SIMPLE_RADIAL ")
-            f.write(f"{size} {size}")
+            f.write(f"{size} {size} ")
             f.write(f"{fx} {cx} {cy} {0.0}\n")
     # ###################
 
