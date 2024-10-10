@@ -21,7 +21,7 @@ def visualize_all_frame(images: ImageDict):
 
         # COLMAP's camera transform is "camera from world"
         rr.log(
-            "camera-" + name,
+            "/all/camera-" + name,
             rr.Transform3D(
                 translation=txyz,
                 rotation=rr.Quaternion(xyzw=qxyzw),
@@ -34,7 +34,7 @@ def visualize_all_frame(images: ImageDict):
         width = 960
         height = 540
         rr.log(
-            "camera-" + name + "/image",
+            "/all/camera-" + name + "/image",
             rr.Pinhole(
                 resolution=[width, height],
                 focal_length=[width / 5, width / 5],
@@ -87,9 +87,9 @@ def visualize_each_frame(images: ImageDict, image_dir: str):
 
 
 def visualize(args: argparse.Namespace) -> None:
-    cameras, images, points3D = read_model(
-        Path(args.dataset), ext=".bin"
-    )  # pyright: ignore
+    cameras, images, points3D = read_model(  # pyright: ignore
+        Path(args.dataset), ext=".bin" if args.input_type == "BIN" else ".txt"
+    )
 
     rr.log("/", rr.ViewCoordinates.RIGHT_HAND_Y_DOWN, static=True)
 
@@ -102,6 +102,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("--dataset", required=True, type=str)
     parser.add_argument("--image_dir", required=False, default="", type=str)
+    parser.add_argument(
+        "--input_type",
+        type=str,
+        default="BIN",
+        choices=["BIN", "TXT"],
+        help="input type",
+    )
     rr.script_add_args(parser)
     args = parser.parse_args()
 
