@@ -225,9 +225,7 @@ def offset_image_id(conn: sqlite3.Connection, offset: int):
         cur.close()
 
 
-def correct_image_id(
-    image_id: int, image_name: str, offset: int, conn: sqlite3.Connection
-):
+def correct_image_id(image_id: int, image_name: str, conn: sqlite3.Connection):
     cur = conn.cursor()
 
     try:
@@ -265,6 +263,26 @@ def correct_image_id(
         cur.close()
 
 
+def check_colmap_sparse_has_all_images(conn: sqlite3.Connection, images: ImageDict):
+    cur = conn.cursor()
+
+    try:
+
+        names = set()
+        for image in images.values():
+            names.add(image.name)
+        cur.execute("SELECT name FROM images")
+
+        result = cur.fetchall()
+        for row in result:
+            name = row[0]
+            if name not in names:
+                assert False, f"Image {name} is not in the sparse file"
+
+    finally:
+        cur.close()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -294,12 +312,12 @@ def main():
     conn = sqlite3.connect(args.database_path)
 
     try:
+        check_colmap_sparse_has_all_images(conn, images)
+
         offset_image_id(conn, OFFSET)
 
         for image in images.values():
-            correct_image_id(image.id, image.name, OFFSET, conn)
-            # id.append(image.id)
-            # names.append(image.name)
+            correct_image_id(image.id, image.name, conn)
 
     finally:
         conn.commit()
