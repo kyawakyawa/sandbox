@@ -251,7 +251,7 @@ def write_colmap_sparse_txt(
         f.write(image_header)
 
         for image_id, (name, txyz, qwxyz) in enumerate(zip(names, txyzs, qwxyzs)):
-            camera_id = image_id + 1
+            camera_id = 1 if single_camera else image_id + 1
 
             f.write(f"{image_id + 1} ")
             f.write(" ".join(map(str, qwxyz)) + " ")
