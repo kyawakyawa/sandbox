@@ -85,6 +85,7 @@ def create_grid(coord2camera: torch.Tensor, tile_w: int, tile_h: int):
 
     return grid
 
+
 def to_cube(args: argparse.Namespace, image_path: str):
     tile_w = args.size
     tile_h = args.size
@@ -285,6 +286,7 @@ def convert_all_images(args: argparse.Namespace, images: ImageDict):
             new_image_name = se[0] + f"-{DIRECTION_NAMES[i]}" + se[1]
 
             output_path = pt.join(args.images_output_dir, new_image_name)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
             tqdm.write("Write image: " + output_path)
             cv2.imwrite(output_path, cube_image)
 
