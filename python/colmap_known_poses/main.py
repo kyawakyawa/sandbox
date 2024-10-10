@@ -283,6 +283,27 @@ def check_colmap_sparse_has_all_images(conn: sqlite3.Connection, images: ImageDi
         cur.close()
 
 
+def check_image_ids(conn: sqlite3.Connection, images: ImageDict):
+    cur = conn.cursor()
+
+    try:
+        for image in images.values():
+            cur.execute(
+                "SELECT image_id FROM images WHERE name = ?",
+                (image.name,),
+            )
+
+            result = cur.fetchall()
+            assert len(result) == 1
+
+            image_id = result[0][0]
+            assert image_id == image.id
+        print("ok.")
+
+    finally:
+        cur.close()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -302,6 +323,9 @@ def main():
         required=True,
         help="colmap database path to be corrected",
     )
+    parser.add_argument("--check_mode", action="store_true", help="check mode")
+    parser.add_argument("--dry_run", action="store_true", help="dry run mode")
+
     args = parser.parse_args()
 
     _, images, _ = read_model(  # pyright: ignore
@@ -312,15 +336,20 @@ def main():
     conn = sqlite3.connect(args.database_path)
 
     try:
-        check_colmap_sparse_has_all_images(conn, images)
+        if args.check_mode:
+            check_colmap_sparse_has_all_images(conn, images)
+            check_image_ids(conn, images)
+        else:
+            check_colmap_sparse_has_all_images(conn, images)
 
-        offset_image_id(conn, OFFSET)
+            offset_image_id(conn, OFFSET)
 
-        for image in images.values():
-            correct_image_id(image.id, image.name, conn)
+            for image in images.values():
+                correct_image_id(image.id, image.name, conn)
 
     finally:
-        conn.commit()
+        if not args.dry_run:
+            conn.commit()
         conn.close()
 
 
