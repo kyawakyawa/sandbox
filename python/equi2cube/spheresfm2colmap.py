@@ -71,7 +71,7 @@ def to_cube(args: argparse.Namespace, image_path: str):
     grids = torch.zeros((6, tile_h, tile_w, 2), dtype=FTYPE, device=DEVICE)
     deg90 = math.pi / 2
     additional_extrinsics = (
-        torch.eye(4).to(FTYPE).to(DEVICE)[None, :, :].expand(6, -1, -1)
+        torch.eye(4).to(FTYPE).to(DEVICE)[None, :, :].repeat(6, 1, 1)
     )
 
     # front
@@ -197,7 +197,7 @@ def write_colmap_sparse_txt(
             assert (fx - fy) < 1e-6
             f.write(f"{camera_id + 1} ")
             f.write("SIMPLE_RADIAL ")
-            f.write(f"{size} {size}")
+            f.write(f"{size} {size} ")
             f.write(f"{fx} {cx} {cy} {0.0}\n")
     # ###################
 
