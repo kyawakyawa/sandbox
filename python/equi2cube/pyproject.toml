@@ -5,8 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "debugpy>=1.8.6",
     "opencv-python>=4.10.0.84",
     "rerun-sdk>=0.18.2",
     "torch>=2.4.1",
     "torchvision>=0.19.1",
+    "tqdm>=4.66.5",
 ]

@@ -8,9 +8,10 @@ from typing import cast
 import cv2
 import numpy as np
 import torch
+from tqdm import tqdm
 
 from read_write_model import Image as CImage
-from read_write_model import read_model, rotmat2qvec
+from read_write_model import qvec2rotmat, read_model, rotmat2qvec
 
 ImageDict = dict[int, CImage]
 
@@ -134,7 +135,7 @@ def to_cube(args: argparse.Namespace, image_path: str):
 
     sampled = torch.nn.functional.grid_sample(imgs, grids, align_corners=True)
 
-    sampled_np = sampled.permute(0, 2, 3, 1).cpu().numpy()
+    sampled_np = (sampled.permute(0, 2, 3, 1) * 255).to(torch.uint8).cpu().numpy()
     additional_extrinsics_np = additional_extrinsics.cpu().numpy()
 
     intrinsics_np = (
@@ -142,6 +143,14 @@ def to_cube(args: argparse.Namespace, image_path: str):
     )
 
     return sampled_np, additional_extrinsics_np, intrinsics_np
+
+
+def colmap_pose_to_44(txyz: np.ndarray, qwxyz: np.ndarray):
+    ret = np.eye(4).astype(txyz.dtype)
+    ret[:3, 3] = txyz
+
+    ret[:3, :3] = qvec2rotmat(qwxyz)
+    return ret
 
 
 def to_colmap_pose(t44: np.ndarray):
@@ -163,7 +172,7 @@ def write_colmap_sparse_txt(
     size: int,
 ):
     # points3D.txtは空ファイル
-    with open("points3D.txt", "w") as _:
+    with open(pt.join(dir, "points3D.txt"), "w") as f:
         pass
 
     # ### cameras.txt ###
@@ -188,8 +197,8 @@ def write_colmap_sparse_txt(
             assert (fx - fy) < 1e-6
             f.write(f"{camera_id + 1} ")
             f.write("SIMPLE_RADIAL ")
-            f.write(f"{size} {size} \n")
-            f.write(f"{fx} {cx} {cy} {0.0}")
+            f.write(f"{size} {size}")
+            f.write(f"{fx} {cx} {cy} {0.0}\n")
     # ###################
 
     # ### images.txt ###
@@ -210,7 +219,7 @@ def write_colmap_sparse_txt(
             f.write(f"{image_id + 1} ")
             f.write(" ".join(map(str, qwxyz)) + " ")
             f.write(" ".join(map(str, txyz)) + " ")
-            f.write(f"{camera_id} {name}\n")
+            f.write(f"{camera_id} {name}\n\n")
 
     # ##################
 
@@ -229,19 +238,24 @@ def convert_all_images(args: argparse.Namespace, images: ImageDict):
     intrinsics = np.zeros((n * num_direction, 4))
     names = []
 
-    for img_cnt, image in enumerate(images.values()):
+    for img_cnt, image in tqdm(enumerate(images.values()), total=n):
         image_path = pt.join(args.image_dir, image.name)
         cube_images, additional_extrinsics, _intrinsics = to_cube(args, image_path)
 
         assert len(cube_images) == num_direction
 
         for i, cube_image in enumerate(cube_images):
-            new_image_name = f"{image.name}_{DIRECTION_NAMES[i]}"
-            output_path = pt.join(args.output_dir, new_image_name)
+            se = os.path.splitext(image.name)
+            new_image_name = se[0] + f"-{DIRECTION_NAMES[i]}" + se[1]
+
+            output_path = pt.join(args.images_output_dir, new_image_name)
+            tqdm.write("Write image: " + output_path)
             cv2.imwrite(output_path, cube_image)
 
             # Colmap用の情報を記録
-            _qvec, _t = to_colmap_pose(additional_extrinsics[i])
+            _qvec, _t = to_colmap_pose(
+                additional_extrinsics[i] @ colmap_pose_to_44(image.tvec, image.qvec)
+            )
             txyzs[img_cnt * num_direction + i] = _t
             qwxyzs[img_cnt * num_direction + i] = _qvec
             intrinsics[img_cnt * num_direction + i] = _intrinsics[i]
@@ -255,9 +269,7 @@ def main():
     parser.add_argument(
         "-i", "--input_dir", type=str, required=True, help="sphare sfm sparse"
     )
-    parser.add_argument(
-        "-I", "--image_dir", type=str, required=True, help="image dir"
-    )
+    parser.add_argument("-I", "--image_dir", type=str, required=True, help="image dir")
     parser.add_argument(
         "--input_type",
         type=str,
@@ -268,6 +280,13 @@ def main():
     parser.add_argument(
         "-o", "--output_dir", type=str, required=True, help="output colmap sparse"
     )
+    parser.add_argument(
+        "-O",
+        "--images_output_dir",
+        type=str,
+        required=True,
+        help="output colmap images",
+    )
     parser.add_argument("-s", "--size", type=int, default=1600, help="tile size")
     parser.add_argument(
         "--single_camera", action="store_true", help="use single camera model"
@@ -275,6 +294,7 @@ def main():
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args.images_output_dir, exist_ok=True)
 
     input_dir: str = args.input_dir
     output_dir: str = args.output_dir
