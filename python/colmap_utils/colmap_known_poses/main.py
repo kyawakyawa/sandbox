@@ -205,6 +205,8 @@ import sqlite3
 from pathlib import Path
 from typing import cast
 
+import numpy as np
+
 from read_write_model import Image as CImage
 from read_write_model import qvec2rotmat, read_model, rotmat2qvec
 
@@ -304,6 +306,46 @@ def check_image_ids(conn: sqlite3.Connection, images: ImageDict):
         cur.close()
 
 
+def insert_prior_poses(conn: sqlite3.Connection, images: ImageDict):
+
+    cur = conn.cursor()
+    try:
+        for image in images.values():
+            image_id = image.id
+            rot_mat = qvec2rotmat(image.qvec)
+            tvec: np.ndarray = image.tvec
+            assert type(tvec) == np.ndarray
+
+            position = -(rot_mat.transpose(1, 0) @ tvec[:, None]).flatten()
+            position = position.reshape((3,)).astype(np.float64)
+            coordinate_type = 1
+
+            blob_position = position.tobytes()
+
+            cur.execute(
+                "INSERT OR REPLACE INTO pose_priors (image_id, position, coordinate_system) VALUES (?, ?, ?) ",
+                (image_id, blob_position, coordinate_type),
+            )
+    finally:
+        cur.close()
+
+
+def fetch_prior_poses(conn: sqlite3.Connection):
+    cur = conn.cursor()
+
+    ret = []
+    try:
+        cur.execute("SELECT image_id, position FROM pose_priors")
+
+        ret = [
+            (row[0], np.frombuffer(row[1], dtype=np.float64)) for row in cur.fetchall()
+        ]
+
+    finally:
+        cur.close()
+    return ret
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -325,6 +367,9 @@ def main():
     )
     parser.add_argument("--check_mode", action="store_true", help="check mode")
     parser.add_argument("--dry_run", action="store_true", help="dry run mode")
+    parser.add_argument(
+        "--insert_prior_pose", action="store_true", help="insert prior pose"
+    )
 
     args = parser.parse_args()
 
@@ -346,6 +391,23 @@ def main():
 
             for image in images.values():
                 correct_image_id(image.id, image.name, conn)
+
+            if args.insert_prior_pose:
+                insert_prior_poses(conn, images)
+
+                id_position = fetch_prior_poses(conn)
+
+                for id, position in id_position:
+                    image = images[id]
+
+                    rot_mat = qvec2rotmat(image.qvec)
+                    tvec: np.ndarray = image.tvec
+                    assert type(tvec) == np.ndarray
+
+                    pos = -(rot_mat.transpose(1, 0) @ tvec[:, None]).flatten()
+                    pos = pos.reshape((3,)).astype(np.float64)
+
+                    print(image.name, ": ", position, " vs ", pos)
 
     finally:
         if not args.dry_run:
