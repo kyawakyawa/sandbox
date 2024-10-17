@@ -87,6 +87,7 @@ def create_grid(coord2camera: torch.Tensor, tile_w: int, tile_h: int):
 
 
 def to_cube(args: argparse.Namespace, image_path: str):
+
     tile_w = args.size
     tile_h = args.size
 
@@ -95,7 +96,9 @@ def to_cube(args: argparse.Namespace, image_path: str):
     img = torch.from_numpy(img_np).to(DEVICE).permute(2, 0, 1)
     img = img.to(FTYPE) / 255
 
-    fx = fy = tile_w / (2 * math.tan(math.pi * 0.5 / 2))
+    fov_rad = float(args.fov) * math.pi / 180.0
+    assert 0 < fov_rad and fov_rad < math.pi
+    fx = fy = tile_w / (2 * math.tan(fov_rad / 2))
     cx = tile_w / 2
     cy = tile_h / 2
 
@@ -325,6 +328,7 @@ def main():
         required=True,
         help="output colmap images",
     )
+    parser.add_argument("-f", "--fov", type=float, default=90.0, help="fov")
     parser.add_argument("-s", "--size", type=int, default=1600, help="tile size")
     parser.add_argument(
         "--single_camera", action="store_true", help="use single camera model"

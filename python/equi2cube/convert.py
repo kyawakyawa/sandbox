@@ -284,6 +284,7 @@ def main():
     parser.add_argument("-i", "--input_dir", type=str, required=True)
     parser.add_argument("-o", "--output_dir", type=str, required=True)
     parser.add_argument("-s", "--size", type=int, default=1600, help="tile size")
+    parser.add_argument("-f", "--fov", type=float, default=90.0, help="fov")
     args = parser.parse_args()
 
     input_dir: str = args.input_dir
@@ -301,7 +302,10 @@ def main():
         tile_w = args.size
         tile_h = args.size
 
-        fx = fy = tile_w / (2 * math.tan(math.pi * 0.5 / 2))
+        fov_rad = float(args.fov) * math.pi / 180.0
+
+        fx = fy = tile_w / (2 * math.tan(fov_rad / 2))
+        assert 0 < fov_rad and fov_rad < math.pi
         cx = tile_w / 2
         cy = tile_h / 2
 
