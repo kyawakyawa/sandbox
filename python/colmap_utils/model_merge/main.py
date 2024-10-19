@@ -23,6 +23,7 @@ class Config:
     models: list[str]
     output_path: str
     single_camera: bool = True
+    sort_by_name: bool = False
 
 
 @dataclass
@@ -53,7 +54,9 @@ def load_models(model_names: list[str]) -> dict[str, Model]:
     return models
 
 
-def merge_models(models: dict[str, Model], single_camera: bool) -> Model:
+def merge_models(
+    models: dict[str, Model], single_camera: bool, sort_by_name: bool
+) -> Model:
     merged_cameras: CameraDict = {}
     merged_images: ImageDict = {}
 
@@ -109,12 +112,31 @@ def merge_models(models: dict[str, Model], single_camera: bool) -> Model:
         camera_id_offset += max(cameras.keys()) + 1
         image_id_offset += max(images.keys()) + 1
 
+    if sort_by_name:
+        _merged_images = list(merged_images.values())
+        # nameでソート
+        _merged_images.sort(key=lambda x: x.name)
+        _merged_images = [
+            Image(
+                id=new_id,
+                qvec=image.qvec,
+                tvec=image.tvec,
+                camera_id=image.camera_id,
+                name=image.name,
+                xys=image.xys,
+                point3D_ids=image.point3D_ids,
+            )
+            for new_id, image in enumerate(_merged_images)
+        ]
+
+        merged_images = {image.id: image for image in _merged_images}
+
     return Model(cameras=merged_cameras, images=merged_images)
 
 
 def main(config: Config):
     models = load_models(config.models)
-    merged_model = merge_models(models, config.single_camera)
+    merged_model = merge_models(models, config.single_camera, config.sort_by_name)
 
     os.makedirs(config.output_path, exist_ok=True)
 
