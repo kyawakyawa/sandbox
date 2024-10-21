@@ -1,14 +1,14 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
-import os
-import copy
+from typing import Literal
 
 import tyro
 from rich.console import Console
 from read_write_model import (
-    read_model,
     Camera,
     Image,
+    read_model,
     write_cameras_text,
     write_images_text,
 )
@@ -24,6 +24,7 @@ class Config:
     output_path: str
     single_camera: bool = True
     sort_by_name: bool = False
+    conflict: Literal["skip", "error"] = "skip"
 
 
 @dataclass
@@ -73,6 +74,7 @@ def merge_models(
             params=camera.params,
         )
 
+    used_names = set()
     for model in models.values():
         cameras = model.cameras
         images = model.images
@@ -91,12 +93,20 @@ def merge_models(
                 merged_cameras[new_camera_id] = new_camera
 
         for image_id, image in images.items():
-            new_image = copy.deepcopy(image)
             new_camera_id = (
                 image.camera_id + camera_id_offset if not single_camera else 1
             )
 
             new_image_id = image_id + image_id_offset
+            assert new_image_id not in merged_images
+
+            if image.name in used_names:
+                if config.conflict == "skip":
+                    continue
+                elif config.conflict == "error":
+                    raise ValueError(f"Duplicate image name: {image.name}")
+            used_names.add(image.name)
+
             new_image = Image(
                 id=new_image_id,
                 qvec=image.qvec,
@@ -106,7 +116,6 @@ def merge_models(
                 xys=[],
                 point3D_ids=[],
             )
-            assert new_image_id not in merged_images
             merged_images[new_image_id] = new_image
 
         camera_id_offset += max(cameras.keys()) + 1
