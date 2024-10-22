@@ -200,8 +200,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-import argparse
 import sqlite3
+import logging
+from rich.logging import RichHandler
 from pathlib import Path
 from typing import cast
 
@@ -209,6 +210,17 @@ import numpy as np
 
 from read_write_model import Image as CImage
 from read_write_model import qvec2rotmat, read_model, rotmat2qvec
+from dataclasses import dataclass
+from typing import Literal
+from rich.progress import track
+import tyro
+
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+)
+
+log = logging.getLogger("rich")
 
 ImageDict = dict[int, CImage]
 
@@ -258,9 +270,12 @@ def correct_image_id(image_id: int, image_name: str, conn: sqlite3.Connection):
             (image_id, before_image_id),
         )
 
-        print(
-            f"Corrected image_id for {image_name} from {before_image_id} to {image_id}"
-        )
+        # log.info(
+        #     f"Corrected image_id for {image_name} from {before_image_id - OFFSET} to {image_id}"
+        # )
+        # print(
+        #     f"Corrected image_id for {image_name} from {before_image_id - OFFSET} to {image_id}"
+        # )
     finally:
         cur.close()
 
@@ -269,7 +284,6 @@ def check_colmap_sparse_has_all_images(conn: sqlite3.Connection, images: ImageDi
     cur = conn.cursor()
 
     try:
-
         names = set()
         for image in images.values():
             names.add(image.name)
@@ -307,7 +321,6 @@ def check_image_ids(conn: sqlite3.Connection, images: ImageDict):
 
 
 def insert_prior_poses(conn: sqlite3.Connection, images: ImageDict):
-
     cur = conn.cursor()
     try:
         for image in images.values():
@@ -346,58 +359,76 @@ def fetch_prior_poses(conn: sqlite3.Connection):
     return ret
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-i", "--input_dir", type=str, required=True, help="colmap sparse"
-    )
-    parser.add_argument(
-        "--input_type",
-        type=str,
-        default="BIN",
-        choices=["BIN", "TXT"],
-        help="input type",
-    )
-    parser.add_argument(
-        "-d",
-        "--database_path",
-        type=str,
-        required=True,
-        help="colmap database path to be corrected",
-    )
-    parser.add_argument("--check_mode", action="store_true", help="check mode")
-    parser.add_argument("--dry_run", action="store_true", help="dry run mode")
-    parser.add_argument(
-        "--insert_prior_pose", action="store_true", help="insert prior pose"
-    )
+@dataclass
+class Config:
+    input_dir: str
+    database_path: str
+    input_type: Literal["BIN", "TXT"] = "BIN"
+    check_mode: bool = False
+    dry_run: bool = False
+    insert_prior_pose: bool = False
 
-    args = parser.parse_args()
+
+def main():
+    config = tyro.cli(Config)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument(
+    #     "-i", "--input_dir", type=str, required=True, help="colmap sparse"
+    # )
+    # parser.add_argument(
+    #     "--input_type",
+    #     type=str,
+    #     default="BIN",
+    #     choices=["BIN", "TXT"],
+    #     help="input type",
+    # )
+    # parser.add_argument(
+    #     "-d",
+    #     "--database_path",
+    #     type=str,
+    #     required=True,
+    #     help="colmap database path to be corrected",
+    # )
+    # parser.add_argument("--check_mode", action="store_true", help="check mode")
+    # parser.add_argument("--dry_run", action="store_true", help="dry run mode")
+    # parser.add_argument(
+    #     "--insert_prior_pose", action="store_true", help="insert prior pose"
+    # )
+
+    # args = parser.parse_args()
 
     _, images, _ = read_model(  # pyright: ignore
-        Path(args.input_dir), ext=".bin" if args.input_type == "BIN" else ".txt"
+        Path(config.input_dir), ext=".bin" if config.input_type == "BIN" else ".txt"
     )
     images = cast(ImageDict, images)
 
-    conn = sqlite3.connect(args.database_path)
+    conn = sqlite3.connect(config.database_path)
 
     try:
-        if args.check_mode:
+        if config.check_mode:
             check_colmap_sparse_has_all_images(conn, images)
             check_image_ids(conn, images)
         else:
+            log.info("Start to check sparse has all images")
             check_colmap_sparse_has_all_images(conn, images)
+            log.info("Finsh checking sparse has all images")
 
+            log.info("Start to add offset")
             offset_image_id(conn, OFFSET)
+            log.info("End to add offset")
 
-            for image in images.values():
+            # for image in images.values():
+            for image in track(images.values(), description="Correcting image_id..."):
                 correct_image_id(image.id, image.name, conn)
 
-            if args.insert_prior_pose:
+            if config.insert_prior_pose:
                 insert_prior_poses(conn, images)
 
                 id_position = fetch_prior_poses(conn)
 
-                for id, position in id_position:
+                for id, position in track(
+                    id_position, description="Inserting prior poses..."
+                ):
                     image = images[id]
 
                     rot_mat = qvec2rotmat(image.qvec)
@@ -407,10 +438,10 @@ def main():
                     pos = -(rot_mat.transpose(1, 0) @ tvec[:, None]).flatten()
                     pos = pos.reshape((3,)).astype(np.float64)
 
-                    print(image.name, ": ", position, " vs ", pos)
+                    # print(image.name, ": ", position, " vs ", pos)
 
     finally:
-        if not args.dry_run:
+        if not config.dry_run:
             conn.commit()
         conn.close()
 
