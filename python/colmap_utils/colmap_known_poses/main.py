@@ -209,7 +209,7 @@ from typing import cast
 import numpy as np
 
 from read_write_model import Image as CImage
-from read_write_model import qvec2rotmat, read_model, rotmat2qvec
+from read_write_model import qvec2rotmat, read_model, write_model
 from dataclasses import dataclass
 from typing import Literal
 from rich.progress import track
@@ -231,10 +231,14 @@ def offset_image_id(conn: sqlite3.Connection, offset: int):
     cur = conn.cursor()
 
     try:
+        cur.execute("PRAGMA foreign_keys = OFF")
+
         cur.execute("UPDATE images SET image_id = image_id + ?", (offset,))
         cur.execute("UPDATE descriptors SET image_id = image_id + ?", (offset,))
         cur.execute("UPDATE keypoints SET image_id = image_id + ?", (offset,))
         cur.execute("UPDATE pose_priors SET image_id = image_id + ?", (offset,))
+
+        cur.execute("PRAGMA foreign_keys = ON")
     finally:
         cur.close()
 
@@ -242,6 +246,7 @@ def offset_image_id(conn: sqlite3.Connection, offset: int):
 def correct_image_id(image_id: int, image_name: str, conn: sqlite3.Connection):
     cur = conn.cursor()
 
+    ret = False
     try:
         cur.execute(
             "SELECT image_id FROM images WHERE name = ?",
@@ -276,8 +281,29 @@ def correct_image_id(image_id: int, image_name: str, conn: sqlite3.Connection):
         # print(
         #     f"Corrected image_id for {image_name} from {before_image_id - OFFSET} to {image_id}"
         # )
+        if before_image_id != image_id:
+            log.info(
+                f"Corrected image_id for {image_name} from {before_image_id - OFFSET} to {image_id}"
+            )
+            ret = True
     finally:
         cur.close()
+    return ret
+
+
+def fetch_image_id_and_name(conn: sqlite3.Connection):
+    cur = conn.cursor()
+
+    ret: list[tuple[int, str]] = []
+    try:
+        sql = "SELECT image_id, name FROM images"
+        log.info("query: " + sql)
+        cur.execute(sql)
+
+        ret = [(row[0], row[1]) for row in cur.fetchall()]
+    finally:
+        cur.close()
+    return ret
 
 
 def check_colmap_sparse_has_all_images(conn: sqlite3.Connection, images: ImageDict):
@@ -287,7 +313,10 @@ def check_colmap_sparse_has_all_images(conn: sqlite3.Connection, images: ImageDi
         names = set()
         for image in images.values():
             names.add(image.name)
-        cur.execute("SELECT name FROM images")
+        sql = "SELECT name FROM images"
+        log.info("query: " + sql)
+        cur.execute(sql)
+        log.info("fetching...")
 
         result = cur.fetchall()
         for row in result:
@@ -367,6 +396,7 @@ class Config:
     check_mode: bool = False
     dry_run: bool = False
     insert_prior_pose: bool = False
+    edit_sparse: bool = False
 
 
 def main():
@@ -397,7 +427,7 @@ def main():
 
     # args = parser.parse_args()
 
-    _, images, _ = read_model(  # pyright: ignore
+    cameras, images, points3D = read_model(  # pyright: ignore
         Path(config.input_dir), ext=".bin" if config.input_type == "BIN" else ".txt"
     )
     images = cast(ImageDict, images)
@@ -405,21 +435,56 @@ def main():
     conn = sqlite3.connect(config.database_path)
 
     try:
-        if config.check_mode:
-            check_colmap_sparse_has_all_images(conn, images)
-            check_image_ids(conn, images)
-        else:
-            log.info("Start to check sparse has all images")
-            check_colmap_sparse_has_all_images(conn, images)
-            log.info("Finsh checking sparse has all images")
+        log.info("Start to check sparse has all images")
+        check_colmap_sparse_has_all_images(conn, images)
+        log.info("Finsh checking sparse has all images")
 
+        if config.check_mode:
+            check_image_ids(conn, images)
+        elif config.edit_sparse:
+            name2id = {}
+            new_images: ImageDict = {}
+            for image_id, names in track(
+                fetch_image_id_and_name(conn), description="Constructing name2id..."
+            ):
+                name2id[names] = image_id
+
+            for image in track(images.values(), description="Correcting image_id..."):
+                image_id = name2id[image.name]
+
+                new_images[image_id] = CImage(
+                    id=image_id,
+                    qvec=image.qvec,
+                    tvec=image.tvec,
+                    camera_id=image.camera_id,
+                    name=image.name,
+                    xys=image.xys,
+                    point3D_ids=image.point3D_ids,
+                )
+            # TODO: edit points3D
+
+            if not config.dry_run:
+                write_model(
+                    cameras,
+                    new_images,
+                    points3D,
+                    Path(config.input_dir),
+                    ext=".bin" if config.input_type == "BIN" else ".txt",
+                )
+
+        else:
             log.info("Start to add offset")
             offset_image_id(conn, OFFSET)
             log.info("End to add offset")
 
+            cnt_corrected = 0
             # for image in images.values():
             for image in track(images.values(), description="Correcting image_id..."):
-                correct_image_id(image.id, image.name, conn)
+                if correct_image_id(image.id, image.name, conn):
+                    cnt_corrected += 1
+            log.info(
+                f"Corrected {cnt_corrected} images ({ cnt_corrected / len(images) * 100}%)"
+            )
 
             if config.insert_prior_pose:
                 insert_prior_poses(conn, images)
