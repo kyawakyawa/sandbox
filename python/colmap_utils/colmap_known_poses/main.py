@@ -332,7 +332,7 @@ def check_image_ids(conn: sqlite3.Connection, images: ImageDict):
     cur = conn.cursor()
 
     try:
-        for image in images.values():
+        for image in track(images.values(), description="Checking image_id..."):
             cur.execute(
                 "SELECT image_id FROM images WHERE name = ?",
                 (image.name,),
@@ -352,11 +352,11 @@ def check_image_ids(conn: sqlite3.Connection, images: ImageDict):
 def insert_prior_poses(conn: sqlite3.Connection, images: ImageDict):
     cur = conn.cursor()
     try:
-        for image in images.values():
+        for image in track(images.values(), description="Inserting prior poses..."):
             image_id = image.id
             rot_mat = qvec2rotmat(image.qvec)
             tvec: np.ndarray = image.tvec
-            assert type(tvec) == np.ndarray
+            assert type(tvec) is np.ndarray
 
             position = -(rot_mat.transpose(1, 0) @ tvec[:, None]).flatten()
             position = position.reshape((3,)).astype(np.float64)
@@ -463,10 +463,12 @@ def main():
                 )
             # TODO: edit points3D
 
+            images = new_images
+
             if not config.dry_run:
                 write_model(
                     cameras,
-                    new_images,
+                    images,
                     points3D,
                     Path(config.input_dir),
                     ext=".bin" if config.input_type == "BIN" else ".txt",
@@ -486,24 +488,28 @@ def main():
                 f"Corrected {cnt_corrected} images ({ cnt_corrected / len(images) * 100}%)"
             )
 
-            if config.insert_prior_pose:
-                insert_prior_poses(conn, images)
+        if (
+            (not config.dry_run)
+            and (not config.check_mode)
+            and config.insert_prior_pose
+        ):
+            insert_prior_poses(conn, images)
 
-                id_position = fetch_prior_poses(conn)
+            # id_position = fetch_prior_poses(conn)
 
-                for id, position in track(
-                    id_position, description="Inserting prior poses..."
-                ):
-                    image = images[id]
+            # for id, position in track(
+            #     id_position, description="Inserting prior poses..."
+            # ):
+            #     image = images[id]
 
-                    rot_mat = qvec2rotmat(image.qvec)
-                    tvec: np.ndarray = image.tvec
-                    assert type(tvec) == np.ndarray
+            #     rot_mat = qvec2rotmat(image.qvec)
+            #     tvec: np.ndarray = image.tvec
+            #     assert type(tvec) == np.ndarray
 
-                    pos = -(rot_mat.transpose(1, 0) @ tvec[:, None]).flatten()
-                    pos = pos.reshape((3,)).astype(np.float64)
+            #     pos = -(rot_mat.transpose(1, 0) @ tvec[:, None]).flatten()
+            #     pos = pos.reshape((3,)).astype(np.float64)
 
-                    # print(image.name, ": ", position, " vs ", pos)
+            #     print(image.name, ": ", position, " vs ", pos)
 
     finally:
         if not config.dry_run:
