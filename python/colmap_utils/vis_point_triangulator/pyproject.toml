@@ -8,4 +8,5 @@ dependencies = [
     "black>=24.10.0",
     "opencv-python>=4.10.0.84",
     "rerun-sdk>=0.19.0",
+    "rich>=13.9.3",
 ]

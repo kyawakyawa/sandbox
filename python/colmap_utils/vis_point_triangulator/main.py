@@ -83,28 +83,30 @@ def log_point_triangulator(
     for image_id1, image_id2 in image_pairs:
         image1 = images[image_id1]
         image2 = images[image_id2]
-        
+
         visible1 = np.unique(np.array([image1.point3D_ids]))
         visible2 = np.unique(np.array([image2.point3D_ids]))
         # ↑-1 が入っているかも
-        visible = np.intersect1d(visible1,visible2)
+        visible = np.intersect1d(visible1, visible2)
         visible = np.sort(visible)
         assert len(visible) > 0
 
         if visible[0] == -1:
             visible = visible[1:]
-            
-        print("hoge: ", len(visible))
-            
+
         if len(visible) <= 100:
             continue
 
         draw_images(image1, parent="/1", image_dir=image_dir)
         draw_images(image2, parent="/2", image_dir=image_dir)
-        
+
         xyzs = [points3D[id].xyz for id in visible]
         # rgbs = [points3D[id].rgb for id in visible]
-        rgbs = np.full((len(xyzs), 3), 255, dtype=np.uint8,)
+        rgbs = np.full(
+            (len(xyzs), 3),
+            255,
+            dtype=np.uint8,
+        )
         rgbs[:, 1] = 0
         rgbs[:, 2] = 0
         radii = np.ones(len(xyzs)) * 0.03
