@@ -93,7 +93,8 @@ def visualize(args: argparse.Namespace) -> None:
 
     rr.log("/", rr.ViewCoordinates.RIGHT_HAND_Y_DOWN, static=True)
 
-    visualize_all_frame(images)  # pyright: ignore
+    if args.all_frames:
+        visualize_all_frame(images)  # pyright: ignore
 
     visualize_each_frame(images, args.image_dir)  # pyright: ignore
 
@@ -109,6 +110,7 @@ def main() -> None:
         choices=["BIN", "TXT"],
         help="input type",
     )
+    parser.add_argument("--all_frames", action="store_true")
     rr.script_add_args(parser)
     args = parser.parse_args()
 
