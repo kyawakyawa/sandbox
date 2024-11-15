@@ -39,8 +39,19 @@ import os
 import struct
 from pathlib import Path
 from typing import Mapping
+import logging
 
 import numpy as np
+from rich.progress import track
+from rich.logging import RichHandler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
+log = logging.getLogger("rich")
 
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"]
@@ -148,7 +159,7 @@ def read_cameras_binary(path_to_model_file: Path) -> Mapping[int, Camera]:
     cameras = {}
     with path_to_model_file.open("rb") as fid:
         num_cameras = read_next_bytes(fid, 8, "Q")[0]
-        for _ in range(num_cameras):
+        for _ in track(range(num_cameras)):
             camera_properties = read_next_bytes(
                 fid, num_bytes=24, format_char_sequence="iiQQ"
             )
@@ -254,7 +265,7 @@ def read_images_binary(path_to_model_file: Path) -> Mapping[int, Image]:
     images = {}
     with open(path_to_model_file, "rb") as fid:
         num_reg_images = read_next_bytes(fid, 8, "Q")[0]
-        for _ in range(num_reg_images):
+        for _ in track(range(num_reg_images)):
             binary_image_properties = read_next_bytes(
                 fid, num_bytes=64, format_char_sequence="idddddddi"
             )
@@ -385,7 +396,7 @@ def read_points3D_binary(path_to_model_file: Path) -> Mapping[int, Point3D]:
     points3D = {}
     with open(path_to_model_file, "rb") as fid:
         num_points = read_next_bytes(fid, 8, "Q")[0]
-        for _ in range(num_points):
+        for _ in track(range(num_points)):
             binary_point_line_properties = read_next_bytes(
                 fid, num_bytes=43, format_char_sequence="QdddBBBd"
             )
@@ -483,12 +494,20 @@ def read_model(path: Path, ext: str = ""):
             return
 
     if ext == ".txt":
+        log.info("Reading text model")
+        log.info("Reading cameras")
         cameras = read_cameras_text((path / "cameras").with_suffix(ext))
+        log.info("Reading images")
         images = read_images_text((path / "images").with_suffix(ext))
+        log.info("Reading points3D")
         points3D = read_points3D_text((path / "points3D").with_suffix(ext))
     else:
+        log.info("Reading binary model")
+        log.info("Reading cameras")
         cameras = read_cameras_binary((path / "cameras").with_suffix(ext))
+        log.info("Reading images")
         images = read_images_binary((path / "images").with_suffix(ext))
+        log.info("Reading points3D")
         points3D = read_points3D_binary((path / "points3D").with_suffix(ext))
     return cameras, images, points3D
 
