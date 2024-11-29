@@ -202,6 +202,22 @@ def to_colmap_pose(t44: np.ndarray):
     return qvec, t
 
 
+def sort_by_name(
+    names: list[str],
+    txyzs: np.ndarray,
+    qwxyzs: np.ndarray,
+    intrinsics: np.ndarray,
+):
+    indices = np.argsort(names)
+
+    return (
+        [names[i] for i in indices],
+        txyzs[indices],
+        qwxyzs[indices],
+        intrinsics[indices],
+    )
+
+
 def write_colmap_sparse_txt(
     dir: str,
     names: list[str],
@@ -348,6 +364,8 @@ def main():
     images = cast(ImageDict, images)
 
     names, txyzs, qwxyzs, intrinsics = convert_all_images(args, images)
+
+    names, txyzs, qwxyzs, intrinsics = sort_by_name(names, txyzs, qwxyzs, intrinsics)
 
     write_colmap_sparse_txt(
         output_dir, names, txyzs, qwxyzs, intrinsics, args.single_camera, args.size
