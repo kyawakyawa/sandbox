@@ -1,0 +1,11 @@
+{
+  "name": "spdlog-test",
+  "version": "0.0.1",
+  "dependencies": [
+    {
+      "name": "spdlog",
+      "version>=": "1.13.0"
+    }
+  ],
+  "builtin-baseline": "b7601ed37e1e1ce11a4f61b4b94a23e39d465f1d"
+}
