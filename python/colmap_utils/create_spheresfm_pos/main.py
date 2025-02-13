@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
     images = cast(ImageDict, images)
 
-    lines: list[str] = []
+    lines: list[str] = ["#F=N X Y Z R"]
     for image in images.values():
         name = image.name
         txyz = image.tvec
