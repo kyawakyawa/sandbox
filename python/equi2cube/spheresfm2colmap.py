@@ -125,37 +125,41 @@ def to_cube(args: argparse.Namespace, image_path: str):
 
     # front
     R = torch.eye(4).to(FTYPE).to(DEVICE)
-    coord2camera = torch.linalg.inv(intrinsic @ pitch_rotation_matrix @ R)
+    R = pitch_rotation_matrix @ R
+    coord2camera = torch.linalg.inv(intrinsic @ R)
     grids[0, ...] = create_grid(coord2camera, tile_w, tile_h)
     additional_extrinsics[0, ...] = R
 
     # right
     R = torch.eye(4).to(FTYPE).to(DEVICE)
+    R = pitch_rotation_matrix @ R
     R[0, 0] = math.cos(deg90)
     R[0, 2] = -math.sin(deg90)
     R[2, 0] = math.sin(deg90)
     R[2, 2] = math.cos(deg90)
-    coord2camera = torch.linalg.inv(intrinsic @ pitch_rotation_matrix @ R)
+    coord2camera = torch.linalg.inv(intrinsic @ R)
     grids[1, ...] = create_grid(coord2camera, tile_w, tile_h)
     additional_extrinsics[1, ...] = R
 
     # back
     R = torch.eye(4).to(FTYPE).to(DEVICE)
+    R = pitch_rotation_matrix @ R
     R[0, 0] = math.cos(deg90 * 2)
     R[0, 2] = -math.sin(deg90 * 2)
     R[2, 0] = math.sin(deg90 * 2)
     R[2, 2] = math.cos(deg90 * 2)
-    coord2camera = torch.linalg.inv(intrinsic @ pitch_rotation_matrix @ R)
+    coord2camera = torch.linalg.inv(intrinsic @ R)
     grids[2, ...] = create_grid(coord2camera, tile_w, tile_h)
     additional_extrinsics[2, ...] = R
 
     # left
     R = torch.eye(4).to(FTYPE).to(DEVICE)
+    R = pitch_rotation_matrix @ R
     R[0, 0] = math.cos(deg90 * 3)
     R[0, 2] = -math.sin(deg90 * 3)
     R[2, 0] = math.sin(deg90 * 3)
     R[2, 2] = math.cos(deg90 * 3)
-    coord2camera = torch.linalg.inv(intrinsic @ pitch_rotation_matrix @ R)
+    coord2camera = torch.linalg.inv(intrinsic @ R)
     grids[3, ...] = create_grid(coord2camera, tile_w, tile_h)
     additional_extrinsics[3, ...] = R
 
