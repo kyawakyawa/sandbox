@@ -1,0 +1,6 @@
+defaults:
+  - db: mysql
+  -  _self_ # 他のファイルに上書きされることが前提ならこれを書く？
+
+params:
+  hoge: hoge
