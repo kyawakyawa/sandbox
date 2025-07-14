@@ -127,7 +127,7 @@ def merge_models(
         _merged_images.sort(key=lambda x: x.name)
         _merged_images = [
             Image(
-                id=new_id,
+                id=new_id + 1,
                 qvec=image.qvec,
                 tvec=image.tvec,
                 camera_id=image.camera_id,
