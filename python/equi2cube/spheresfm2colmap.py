@@ -87,7 +87,6 @@ def create_grid(coord2camera: torch.Tensor, tile_w: int, tile_h: int):
 
 
 def to_cube(args: argparse.Namespace, image_path: str):
-
     tile_w = args.size
     tile_h = args.size
 
@@ -114,8 +113,19 @@ def to_cube(args: argparse.Namespace, image_path: str):
         torch.eye(4).to(FTYPE).to(DEVICE)[None, :, :].repeat(6, 1, 1)
     )
 
+    # Convert pitch angle from degrees to radians
+    pitch_angle_rad = float(args.pitch_angle) * math.pi / 180.0
+
+    # Create pitch rotation matrix
+    pitch_rotation_matrix = torch.eye(4).to(FTYPE).to(DEVICE)
+    pitch_rotation_matrix[2, 2] = math.cos(pitch_angle_rad)
+    pitch_rotation_matrix[2, 1] = math.sin(pitch_angle_rad)
+    pitch_rotation_matrix[1, 2] = -math.sin(pitch_angle_rad)
+    pitch_rotation_matrix[1, 1] = math.cos(pitch_angle_rad)
+
     # front
     R = torch.eye(4).to(FTYPE).to(DEVICE)
+    R = pitch_rotation_matrix @ R
     coord2camera = torch.linalg.inv(intrinsic @ R)
     grids[0, ...] = create_grid(coord2camera, tile_w, tile_h)
     additional_extrinsics[0, ...] = R
@@ -126,6 +136,7 @@ def to_cube(args: argparse.Namespace, image_path: str):
     R[0, 2] = -math.sin(deg90)
     R[2, 0] = math.sin(deg90)
     R[2, 2] = math.cos(deg90)
+    R = pitch_rotation_matrix @ R
     coord2camera = torch.linalg.inv(intrinsic @ R)
     grids[1, ...] = create_grid(coord2camera, tile_w, tile_h)
     additional_extrinsics[1, ...] = R
@@ -136,6 +147,7 @@ def to_cube(args: argparse.Namespace, image_path: str):
     R[0, 2] = -math.sin(deg90 * 2)
     R[2, 0] = math.sin(deg90 * 2)
     R[2, 2] = math.cos(deg90 * 2)
+    R = pitch_rotation_matrix @ R
     coord2camera = torch.linalg.inv(intrinsic @ R)
     grids[2, ...] = create_grid(coord2camera, tile_w, tile_h)
     additional_extrinsics[2, ...] = R
@@ -146,6 +158,7 @@ def to_cube(args: argparse.Namespace, image_path: str):
     R[0, 2] = -math.sin(deg90 * 3)
     R[2, 0] = math.sin(deg90 * 3)
     R[2, 2] = math.cos(deg90 * 3)
+    R = pitch_rotation_matrix @ R
     coord2camera = torch.linalg.inv(intrinsic @ R)
     grids[3, ...] = create_grid(coord2camera, tile_w, tile_h)
     additional_extrinsics[3, ...] = R
@@ -348,6 +361,9 @@ def main():
     parser.add_argument("-s", "--size", type=int, default=1600, help="tile size")
     parser.add_argument(
         "--single_camera", action="store_true", help="use single camera model"
+    )
+    parser.add_argument(
+        "--pitch-angle", type=float, help="pitch angle in degrees", default=0.0
     )
     args = parser.parse_args()
 
