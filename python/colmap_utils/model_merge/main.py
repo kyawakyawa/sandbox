@@ -25,6 +25,7 @@ class Config:
     single_camera: bool = True
     sort_by_name: bool = False
     conflict: Literal["skip", "error"] = "skip"
+    zero_indexed: bool = False
 
 
 @dataclass
@@ -56,7 +57,10 @@ def load_models(model_names: list[str]) -> dict[str, Model]:
 
 
 def merge_models(
-    models: dict[str, Model], single_camera: bool, sort_by_name: bool
+    models: dict[str, Model],
+    single_camera: bool,
+    sort_by_name: bool,
+    zero_indexed: bool,
 ) -> Model:
     merged_cameras: CameraDict = {}
     merged_images: ImageDict = {}
@@ -118,8 +122,8 @@ def merge_models(
             )
             merged_images[new_image_id] = new_image
 
-        camera_id_offset += max(cameras.keys()) + 1
-        image_id_offset += max(images.keys()) + 1
+        camera_id_offset += max(cameras.keys()) + (1 if zero_indexed else 0)
+        image_id_offset += max(images.keys()) + (1 if zero_indexed else 0)
 
     if sort_by_name:
         _merged_images = list(merged_images.values())
@@ -145,7 +149,9 @@ def merge_models(
 
 def main(config: Config):
     models = load_models(config.models)
-    merged_model = merge_models(models, config.single_camera, config.sort_by_name)
+    merged_model = merge_models(
+        models, config.single_camera, config.sort_by_name, config.zero_indexed
+    )
 
     os.makedirs(config.output_path, exist_ok=True)
 
