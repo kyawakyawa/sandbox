@@ -3,10 +3,9 @@
 ```bash
 $ python my_app.py 
 db:
-  db:
-    driver: mysql
-    pass: secret
-    user: omry
+  driver: mysql
+  pass: secret
+  user: omry
 params:
   hoge: hoge
 ``` 

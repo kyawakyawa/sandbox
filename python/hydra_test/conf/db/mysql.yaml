@@ -1,4 +1,3 @@
-db:
-  driver: mysql
-  pass: secret
-  user: omry
+driver: mysql
+pass: secret
+user: omry
