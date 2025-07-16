@@ -317,10 +317,11 @@ def convert_all_images(args: argparse.Namespace, images: ImageDict):
             se = os.path.splitext(image.name)
             new_image_name = se[0] + f"-{DIRECTION_NAMES[i]}" + se[1]
 
-            output_path = pt.join(args.images_output_dir, new_image_name)
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            tqdm.write("Write image: " + output_path)
-            cv2.imwrite(output_path, cube_image)
+            if not args.no_save_img:
+                output_path = pt.join(args.images_output_dir, new_image_name)
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                tqdm.write("Write image: " + output_path)
+                cv2.imwrite(output_path, cube_image)
 
             # Colmap用の情報を記録
             _qvec, _t = to_colmap_pose(
@@ -361,6 +362,9 @@ def main():
     parser.add_argument("-s", "--size", type=int, default=1600, help="tile size")
     parser.add_argument(
         "--single_camera", action="store_true", help="use single camera model"
+    )
+    parser.add_argument(
+        "--no_save_img", action="store_true", help="Do not save images"
     )
     parser.add_argument(
         "--pitch-angle", type=float, help="pitch angle in degrees", default=0.0
